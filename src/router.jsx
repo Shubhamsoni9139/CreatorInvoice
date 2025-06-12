@@ -5,7 +5,8 @@ import Signin from "./components/Signin";
 import Dashboard from "./routes/Dashboard";
 import PrivateRoute from "./components/PrivateRoute";
 import CreatorProfile from "./routes/CreatorProfile";
-
+import Items from "./routes/Items";
+import Customer from "./routes/Customer";
 export const router = createBrowserRouter([
   { path: "/", element: <App /> },
   { path: "/signup", element: <Signup /> },
@@ -23,6 +24,22 @@ export const router = createBrowserRouter([
     element: (
       <PrivateRoute>
         <CreatorProfile />
+      </PrivateRoute>
+    ),
+  },
+  {
+    path: "/dashboard/items",
+    element: (
+      <PrivateRoute>
+        <Items />
+      </PrivateRoute>
+    ),
+  },
+  {
+    path: "/dashboard/customer",
+    element: (
+      <PrivateRoute>
+        <Customer />
       </PrivateRoute>
     ),
   },

@@ -25,7 +25,7 @@ const Dashboard = () => {
         <div class="px-4 mx-auto sm:px-6 lg:px-8 bg-gradient-to-r from-green-300 to-black  rounded-full mt-2 ml-2 mr-2">
           <div class="flex items-center justify-between h-16 lg:h-20">
             <div class="flex-shrink-0">
-              <a href="#" title="" class="flex">
+              <a href="" title="" class="flex">
                 <img
                   class="w-full h-15"
                   src="https://framerusercontent.com/images/htoS18uygJMvEeokrXH2TSdQGg0.png"
@@ -36,7 +36,7 @@ const Dashboard = () => {
 
             <div class="hidden lg:flex lg:items-center lg:justify-center lg:space-x-10 ml-5">
               <a
-                href="#"
+                href="/dashboard/items"
                 title=""
                 class="text-base text-Black transition-all duration-200 hover:text-opacity-80"
               >
@@ -45,7 +45,7 @@ const Dashboard = () => {
               </a>
 
               <a
-                href="#"
+                href="/dashboard/customer"
                 title=""
                 class="text-base text-Black transition-all duration-200 hover:text-opacity-80"
               >
