@@ -5,20 +5,26 @@ import { v4 as uuidv4 } from "uuid";
 import dayjs from "dayjs";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { useSearchParams } from "react-router-dom";
 
 const InvoiceGenerator = () => {
   const { session } = UserAuth();
   const userId = session?.user?.id;
+  const [searchParams] = useSearchParams();
+  const editInvoiceId = searchParams.get("edit");
 
   const [creator, setCreator] = useState(null);
   const [items, setItems] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [isEditing, setIsEditing] = useState(false);
 
   const [selectedCustomer, setSelectedCustomer] = useState("");
+  const [selectedItem, setSelectedItem] = useState("");
   const [invoiceItems, setInvoiceItems] = useState([]);
   const [invoiceDate, setInvoiceDate] = useState(dayjs().format("YYYY-MM-DD"));
   const [notes, setNotes] = useState("");
-  const [gstPercent, setGstPercent] = useState(18);
+  const [gstPercent, setGstPercent] = useState("");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -27,8 +33,18 @@ const InvoiceGenerator = () => {
       fetchCreator();
       fetchItems();
       fetchCustomers();
+      if (editInvoiceId) {
+        fetchInvoiceForEdit();
+      }
     }
-  }, [userId]);
+  }, [userId, editInvoiceId]);
+
+  useEffect(() => {
+    const customer = customers.find((c) => c.brand_id === selectedCustomer);
+    if (customer && creator) {
+      setGstPercent(customer.address_state === creator.state ? 9 : 18);
+    }
+  }, [selectedCustomer, creator]);
 
   const fetchCreator = async () => {
     const { data, error } = await supabase
@@ -61,7 +77,52 @@ const InvoiceGenerator = () => {
     else setCustomers(data);
   };
 
-  const addItemToInvoice = (item) => {
+  const fetchInvoiceForEdit = async () => {
+    try {
+      // Fetch invoice details
+      const { data: invoice, error: invoiceError } = await supabase
+        .from("invoices")
+        .select("*")
+        .eq("invoice_id", editInvoiceId)
+        .single();
+
+      if (invoiceError) throw invoiceError;
+
+      // Fetch invoice items
+      const { data: invoiceItemsData, error: itemsError } = await supabase
+        .from("invoice_items")
+        .select("*, items(*)")
+        .eq("invoice_id", editInvoiceId);
+
+      if (itemsError) throw itemsError;
+
+      // Set form data
+      setSelectedCustomer(invoice.brand_id);
+      setInvoiceDate(invoice.invoice_date);
+      setNotes(invoice.notes || "");
+      setInvoiceNumber(invoice.invoice_number);
+
+      // Set invoice items
+      const formattedItems = invoiceItemsData.map((item) => ({
+        item_id: item.item_id,
+        title: item.items.title,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        price: item.unit_price,
+      }));
+
+      setInvoiceItems(formattedItems);
+      setIsEditing(true);
+    } catch (error) {
+      console.error("Error fetching invoice:", error);
+      toast.error("Error loading invoice for editing");
+    }
+  };
+
+  const addItemToInvoice = () => {
+    const item = items.find((i) => i.item_id === selectedItem);
+    if (!item) return;
+
     const existing = invoiceItems.find((i) => i.item_id === item.item_id);
     if (existing) {
       setInvoiceItems((prev) =>
@@ -75,6 +136,7 @@ const InvoiceGenerator = () => {
         { ...item, quantity: 1, unit_price: item.price },
       ]);
     }
+    setSelectedItem("");
   };
 
   const updateQuantity = (item_id, quantity) => {
@@ -89,12 +151,11 @@ const InvoiceGenerator = () => {
     setInvoiceItems((prev) => prev.filter((i) => i.item_id !== item_id));
   };
 
-  const calculateTotal = () => {
-    return invoiceItems.reduce(
+  const calculateTotal = () =>
+    invoiceItems.reduce(
       (sum, item) => sum + item.quantity * item.unit_price,
       0
     );
-  };
 
   const generateInvoiceNumber = () => {
     const random = Math.floor(1000 + Math.random() * 9000);
@@ -112,55 +173,103 @@ const InvoiceGenerator = () => {
     const totalAmount = calculateTotal();
     const gstAmount = (gstPercent / 100) * totalAmount;
     const netAmount = totalAmount + gstAmount;
-    const invoice_id = uuidv4();
-    const invoiceNumber = generateInvoiceNumber();
 
-    // Save invoice
-    const { error: invoiceError } = await supabase.from("invoices").insert([
-      {
-        invoice_id,
-        user_id: userId,
-        brand_id: selectedCustomer,
-        invoice_number: invoiceNumber,
-        invoice_date: invoiceDate,
-        total_amount: totalAmount,
-        gst_amount: gstAmount,
-        net_amount: netAmount,
-        notes,
-        created_at: new Date().toISOString(),
-      },
-    ]);
+    try {
+      if (isEditing) {
+        // Update existing invoice
+        const { error: invoiceError } = await supabase
+          .from("invoices")
+          .update({
+            brand_id: selectedCustomer,
+            invoice_date: invoiceDate,
+            total_amount: totalAmount,
+            gst_amount: gstAmount,
+            net_amount: netAmount,
+            notes,
+          })
+          .eq("invoice_id", editInvoiceId);
 
-    if (invoiceError) {
-      toast.error("Error creating invoice");
+        if (invoiceError) throw invoiceError;
+
+        // Delete existing items
+        const { error: deleteError } = await supabase
+          .from("invoice_items")
+          .delete()
+          .eq("invoice_id", editInvoiceId);
+
+        if (deleteError) throw deleteError;
+
+        // Insert new items
+        const itemsPayload = invoiceItems.map((item) => ({
+          id: uuidv4(),
+          invoice_id: editInvoiceId,
+          item_id: item.item_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          line_total: item.quantity * item.unit_price,
+        }));
+
+        const { error: itemsError } = await supabase
+          .from("invoice_items")
+          .insert(itemsPayload);
+
+        if (itemsError) throw itemsError;
+
+        toast.success("Invoice updated successfully!");
+      } else {
+        // Create new invoice
+        const invoice_id = uuidv4();
+        const newInvoiceNumber = generateInvoiceNumber();
+
+        const { error: invoiceError } = await supabase.from("invoices").insert([
+          {
+            invoice_id,
+            user_id: userId,
+            brand_id: selectedCustomer,
+            invoice_number: newInvoiceNumber,
+            invoice_date: invoiceDate,
+            total_amount: totalAmount,
+            gst_amount: gstAmount,
+            net_amount: netAmount,
+            notes,
+            created_at: new Date().toISOString(),
+          },
+        ]);
+
+        if (invoiceError) throw invoiceError;
+
+        const itemsPayload = invoiceItems.map((item) => ({
+          id: uuidv4(),
+          invoice_id,
+          item_id: item.item_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          line_total: item.quantity * item.unit_price,
+        }));
+
+        const { error: itemsError } = await supabase
+          .from("invoice_items")
+          .insert(itemsPayload);
+
+        if (itemsError) throw itemsError;
+
+        toast.success("Invoice created successfully!");
+      }
+
+      // Reset form
+      if (!isEditing) {
+        setInvoiceItems([]);
+        setSelectedCustomer("");
+        setNotes("");
+      }
+    } catch (error) {
+      console.error("Error saving invoice:", error);
+      toast.error(
+        isEditing ? "Error updating invoice" : "Error creating invoice"
+      );
+    } finally {
       setSubmitting(false);
-      return;
     }
-
-    // Save invoice items
-    const itemsPayload = invoiceItems.map((item) => ({
-      id: uuidv4(),
-      invoice_id,
-      item_id: item.item_id,
-      quantity: item.quantity,
-      unit_price: item.unit_price,
-      line_total: item.quantity * item.unit_price,
-    }));
-
-    const { error: itemsError } = await supabase
-      .from("invoice_items")
-      .insert(itemsPayload);
-
-    if (itemsError) {
-      toast.error("Error saving line items");
-    } else {
-      toast.success("Invoice created successfully!");
-      setInvoiceItems([]);
-      setSelectedCustomer("");
-      setNotes("");
-    }
-
-    setSubmitting(false);
   };
 
   const totalItems = invoiceItems.length;
@@ -171,52 +280,60 @@ const InvoiceGenerator = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
-      <h2 className="text-2xl font-bold mb-6">Create Invoice</h2>
+      <h2 className="text-2xl font-bold mb-6">
+        {isEditing ? "Edit Invoice" : "Create Invoice"}
+      </h2>
 
-      {/* Customer Selector */}
+      {/* Customer */}
       <div className="mb-4">
-        <label className="block mb-1 text-gray-400">Select Customer</label>
+        <label className="block text-gray-400 mb-1">Select Customer</label>
         <select
           className="bg-gray-800 text-white p-3 rounded w-full"
           value={selectedCustomer}
           onChange={(e) => setSelectedCustomer(e.target.value)}
         >
           <option value="">-- Select --</option>
-          {customers.map((brand) => (
-            <option key={brand.brand_id} value={brand.brand_id}>
-              {brand.brand_name} ({brand.brand_email})
+          {customers.map((c) => (
+            <option key={c.brand_id} value={c.brand_id}>
+              {c.brand_name} ({c.state})
             </option>
           ))}
         </select>
       </div>
 
-      {/* Items List */}
-      <div className="mb-4">
-        <label className="block mb-1 text-gray-400">Add Items</label>
-        <div className="flex flex-wrap gap-2">
+      {/* Item dropdown */}
+      <div className="mb-4 flex items-center gap-3">
+        <select
+          className="bg-gray-800 text-white p-3 rounded w-full"
+          value={selectedItem}
+          onChange={(e) => setSelectedItem(e.target.value)}
+        >
+          <option value="">-- Select Item --</option>
           {items.map((item) => (
-            <button
-              key={item.item_id}
-              onClick={() => addItemToInvoice(item)}
-              className="bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
-            >
+            <option key={item.item_id} value={item.item_id}>
               {item.title} ₹{item.price}
-            </button>
+            </option>
           ))}
-        </div>
+        </select>
+        <button
+          onClick={addItemToInvoice}
+          className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700"
+        >
+          Add
+        </button>
       </div>
 
-      {/* Selected Items Table */}
+      {/* Invoice Table */}
       {invoiceItems.length > 0 && (
-        <div className="mb-6 overflow-x-auto">
-          <table className="w-full table-auto bg-gray-800 border border-gray-700">
+        <div className="overflow-x-auto mb-6">
+          <table className="w-full bg-gray-800 border border-gray-700">
             <thead className="bg-gray-700">
               <tr>
                 <th className="px-3 py-2">Item</th>
                 <th className="px-3 py-2">Qty</th>
                 <th className="px-3 py-2">Unit Price</th>
-                <th className="px-3 py-2">Line Total</th>
-                <th className="px-3 py-2">Actions</th>
+                <th className="px-3 py-2">Total</th>
+                <th className="px-3 py-2">Remove</th>
               </tr>
             </thead>
             <tbody>
@@ -231,12 +348,12 @@ const InvoiceGenerator = () => {
                       onChange={(e) =>
                         updateQuantity(item.item_id, e.target.value)
                       }
-                      className="bg-gray-700 w-16 p-1 rounded text-white"
+                      className="bg-gray-700 w-16 p-1 rounded"
                     />
                   </td>
                   <td className="px-3 py-2">₹{item.unit_price}</td>
                   <td className="px-3 py-2">
-                    ₹{item.quantity * item.unit_price}
+                    ₹{item.unit_price * item.quantity}
                   </td>
                   <td className="px-3 py-2">
                     <button
@@ -254,25 +371,24 @@ const InvoiceGenerator = () => {
       )}
 
       {/* Totals */}
-      <div className="space-y-2 text-sm text-gray-300 mb-4">
-        <p>Items Selected: {totalItems}</p>
-        <p>Total Quantity: {totalQuantity}</p>
-        <p>Total: ₹{calculateTotal()}</p>
+      <div className="text-sm text-gray-300 space-y-2 mb-6">
+        <p>Items: {totalItems}</p>
+        <p>Quantity: {totalQuantity}</p>
+        <p>Subtotal: ₹{calculateTotal()}</p>
         <p>
           GST ({gstPercent}%): ₹{(gstPercent / 100) * calculateTotal()}
         </p>
-        <p className="font-bold text-white">
-          Net Amount: ₹
-          {calculateTotal() + (gstPercent / 100) * calculateTotal()}
+        <p className="text-white font-bold">
+          Net: ₹{calculateTotal() + (gstPercent / 100) * calculateTotal()}
         </p>
       </div>
 
       {/* Notes */}
       <textarea
         placeholder="Add notes (optional)"
+        className="w-full bg-gray-800 text-white p-3 rounded mb-4"
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
-        className="w-full bg-gray-800 text-white p-3 rounded mb-4"
       />
 
       {/* Submit */}
@@ -281,7 +397,7 @@ const InvoiceGenerator = () => {
         disabled={submitting}
         className="bg-emerald-500 px-6 py-3 rounded font-semibold hover:bg-emerald-600"
       >
-        {submitting ? "Creating..." : "Generate Invoice"}
+        {submitting ? "Saving..." : "Save Invoice"}
       </button>
 
       <ToastContainer position="top-right" autoClose={3000} theme="dark" />

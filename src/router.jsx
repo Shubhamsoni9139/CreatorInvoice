@@ -7,6 +7,8 @@ import PrivateRoute from "./components/PrivateRoute";
 import CreatorProfile from "./routes/CreatorProfile";
 import Items from "./routes/Items";
 import Customer from "./routes/Customer";
+import InvoiceGenerator from "./routes/Invoice";
+import InvoiceList from "./routes/InvoiceList";
 export const router = createBrowserRouter([
   { path: "/", element: <App /> },
   { path: "/signup", element: <Signup /> },
@@ -40,6 +42,22 @@ export const router = createBrowserRouter([
     element: (
       <PrivateRoute>
         <Customer />
+      </PrivateRoute>
+    ),
+  },
+  {
+    path: "/dashboard/invoice",
+    element: (
+      <PrivateRoute>
+        <InvoiceGenerator />
+      </PrivateRoute>
+    ),
+  },
+  {
+    path: "/dashboard/all",
+    element: (
+      <PrivateRoute>
+        <InvoiceList />
       </PrivateRoute>
     ),
   },

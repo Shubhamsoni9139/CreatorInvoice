@@ -14,6 +14,7 @@ const Items = () => {
     title: "",
     description: "",
     price: "",
+    hsn_sac_code: "",
   });
   const [editingItemId, setEditingItemId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -75,7 +76,7 @@ const Items = () => {
     if (result.error) {
       toast.error(result.error.message);
     } else {
-      setFormData({ title: "", description: "", price: "" });
+      setFormData({ title: "", description: "", price: "", hsn_sac_code: "" });
       setEditingItemId(null);
       setShowModal(false);
       fetchItems();
@@ -83,7 +84,7 @@ const Items = () => {
   };
 
   const handleCreateItem = () => {
-    setFormData({ title: "", description: "", price: "" });
+    setFormData({ title: "", description: "", price: "", hsn_sac_code: "" });
     setEditingItemId(null);
     setShowModal(true);
   };
@@ -93,6 +94,7 @@ const Items = () => {
       title: item.title,
       description: item.description,
       price: item.price,
+      hsn_sac_code: item.hsn_sac_code || "",
     });
     setEditingItemId(item.item_id);
     setShowModal(true);
@@ -113,7 +115,7 @@ const Items = () => {
 
   const closeModal = () => {
     setShowModal(false);
-    setFormData({ title: "", description: "", price: "" });
+    setFormData({ title: "", description: "", price: "", hsn_sac_code: "" });
     setEditingItemId(null);
   };
 
@@ -165,6 +167,15 @@ const Items = () => {
               />
 
               <input
+                type="text"
+                name="hsn_sac_code"
+                placeholder="HSN/SAC Code"
+                value={formData.hsn_sac_code}
+                onChange={handleChange}
+                className="w-full p-3 bg-gray-700 rounded-lg border border-gray-600 placeholder-gray-400"
+              />
+
+              <input
                 type="number"
                 name="price"
                 placeholder="Price"
@@ -205,6 +216,7 @@ const Items = () => {
               <tr className="bg-gray-700 text-gray-300">
                 <th className="px-4 py-2">Title</th>
                 <th className="px-4 py-2">Description</th>
+                <th className="px-4 py-2">HSN/SAC</th>
                 <th className="px-4 py-2">Price</th>
                 <th className="px-4 py-2">Actions</th>
               </tr>
@@ -214,6 +226,7 @@ const Items = () => {
                 <tr key={item.item_id} className="border-t border-gray-700">
                   <td className="px-4 py-2">{item.title}</td>
                   <td className="px-4 py-2">{item.description}</td>
+                  <td className="px-4 py-2">{item.hsn_sac_code || "-"}</td>
                   <td className="px-4 py-2">₹ {item.price}</td>
                   <td className="px-4 py-2 space-x-2">
                     <button

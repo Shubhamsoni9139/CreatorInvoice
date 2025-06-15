@@ -54,7 +54,15 @@ const Dashboard = () => {
               </a>
 
               <a
-                href="#"
+                href="/dashboard/invoice"
+                title=""
+                class="text-base text-Black transition-all duration-200 hover:text-opacity-80"
+              >
+                {" "}
+                Create{" "}
+              </a>
+              <a
+                href="/dashboard/all"
                 title=""
                 class="text-base text-Black transition-all duration-200 hover:text-opacity-80"
               >
