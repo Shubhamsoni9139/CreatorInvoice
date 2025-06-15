@@ -14,6 +14,68 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
       (sum, item) => sum + item.quantity * item.unit_price,
       0
     );
+
+  // Determine GST rate based on business logic
+  const getGstRate = () => {
+    // Check if creator has both PAN and GST number
+    const creatorHasPanAndGst = creator?.pan_number && creator?.gst_number;
+
+    // Check if both creator and customer are from the same state
+    const sameState =
+      creator?.state &&
+      customer?.address_state &&
+      creator.state.toLowerCase() === customer.address_state.toLowerCase();
+
+    // If creator has both PAN and GST, and both are from same state, use 9% (CGST + SGST)
+    // Otherwise use 18% (IGST)
+    return creatorHasPanAndGst && sameState ? 9 : 18;
+  };
+
+  const gstRate = getGstRate();
+  const isIntraState = gstRate === 9; // Same state transaction
+
+  // Group items by HSN/SAC code for GST calculation
+  const groupItemsByHsn = (invoiceItems) => {
+    const grouped = {};
+    invoiceItems.forEach((item) => {
+      const hsnCode =
+        itemsMap[item.item_id]?.hsn_sac_code ||
+        itemsMap[item.item_id]?.hsn_sac ||
+        "N/A";
+      if (!grouped[hsnCode]) {
+        grouped[hsnCode] = {
+          hsnCode,
+          items: [],
+          totalAmount: 0,
+          gstAmount: 0,
+          cgstAmount: 0,
+          sgstAmount: 0,
+          igstAmount: 0,
+        };
+      }
+      grouped[hsnCode].items.push(item);
+      grouped[hsnCode].totalAmount += item.quantity * item.unit_price;
+    });
+
+    // Calculate GST for each HSN group
+    Object.keys(grouped).forEach((hsnCode) => {
+      const baseAmount = grouped[hsnCode].totalAmount;
+      if (isIntraState) {
+        // Same state: CGST + SGST (4.5% each for total 9%)
+        grouped[hsnCode].cgstAmount = baseAmount * 0.045;
+        grouped[hsnCode].sgstAmount = baseAmount * 0.045;
+        grouped[hsnCode].gstAmount =
+          grouped[hsnCode].cgstAmount + grouped[hsnCode].sgstAmount;
+      } else {
+        // Different state: IGST (18%)
+        grouped[hsnCode].igstAmount = baseAmount * 0.18;
+        grouped[hsnCode].gstAmount = grouped[hsnCode].igstAmount;
+      }
+    });
+
+    return Object.values(grouped);
+  };
+
   function numberToWords(num) {
     const a = [
       "",
@@ -85,9 +147,7 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
   const totalAmount = calculateTotal(items);
   const gstAmount = invoice.gst_amount;
   const netAmount = invoice.net_amount;
-  const gstPercentage = ((gstAmount / (netAmount - gstAmount)) * 100).toFixed(
-    2
-  );
+  const hsnGroups = groupItemsByHsn(items);
 
   return (
     <div
@@ -112,7 +172,7 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
         }}
       >
         <div style={{ fontSize: "0.875rem", fontWeight: "bold" }}>
-          TAXINVOICE
+          TAX INVOICE
         </div>
         <div style={{ border: "1px solid #000000", padding: "0.25rem 0.5rem" }}>
           ORIGINAL FOR RECIPIENT
@@ -149,7 +209,15 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
               fontSize: "0.6rem",
             }}
           >
-            <img src={creator?.logo} alt="Logo" />
+            {creator?.logo ? (
+              <img
+                src={creator.logo}
+                alt="Logo"
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+              />
+            ) : (
+              "LOGO"
+            )}
           </div>
           <div>
             <h1
@@ -163,6 +231,9 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
             </h1>
             <p style={{ fontSize: "0.7rem" }}>
               {creator?.address || "Creator Address"}
+            </p>
+            <p style={{ fontSize: "0.7rem" }}>
+              State: {creator?.state || "Creator State"}
             </p>
             <p style={{ fontSize: "0.7rem" }}>
               GSTIN: {creator?.gst_number || "GSTIN"}
@@ -212,6 +283,9 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
           Address: {customer?.address || "Customer Address"}
         </p>
         <p style={{ fontSize: "0.75rem" }}>
+          State: {customer?.address_state || "Customer State"}
+        </p>
+        <p style={{ fontSize: "0.75rem" }}>
           GSTIN: {customer?.gst_number || "GSTIN"}
         </p>
         <p style={{ fontSize: "0.75rem" }}>
@@ -253,7 +327,16 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
                 width: "6rem",
               }}
             >
-              SAC
+              HSN/SAC
+            </th>
+            <th
+              style={{
+                padding: "0.25rem 0.5rem",
+                border: "1px solid #000000",
+                width: "4rem",
+              }}
+            >
+              QTY
             </th>
             <th
               style={{
@@ -300,7 +383,17 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
                   border: "1px solid #000000",
                 }}
               >
-                {itemsMap[item.item_id]?.hsn_sac || "N/A"}
+                {itemsMap[item.item_id]?.hsn_sac_code ||
+                  itemsMap[item.item_id]?.hsn_sac ||
+                  "N/A"}
+              </td>
+              <td
+                style={{
+                  padding: "0.25rem 0.5rem",
+                  border: "1px solid #000000",
+                }}
+              >
+                {item.quantity}
               </td>
               <td
                 style={{
@@ -320,10 +413,11 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
               </td>
             </tr>
           ))}
-          {/* GST Row */}
+
+          {/* Subtotal Row */}
           <tr style={{ border: "1px solid #000000" }}>
             <td
-              colSpan="4"
+              colSpan="5"
               style={{
                 padding: "0.25rem 0.5rem",
                 textAlign: "right",
@@ -331,20 +425,97 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
                 fontWeight: "bold",
               }}
             >
-              IGST @ {gstPercentage || ""}%
+              Subtotal
             </td>
             <td
               style={{ padding: "0.25rem 0.5rem", border: "1px solid #000000" }}
             >
-              ₹{gstAmount}
+              ₹{totalAmount}
             </td>
           </tr>
+
+          {/* GST Rows - Dynamic based on state */}
+          {hsnGroups.map((group, index) => (
+            <React.Fragment key={`gst-${index}`}>
+              {isIntraState ? (
+                // Same state: Show CGST and SGST
+                <>
+                  <tr style={{ border: "1px solid #000000" }}>
+                    <td
+                      colSpan="5"
+                      style={{
+                        padding: "0.25rem 0.5rem",
+                        textAlign: "right",
+                        border: "1px solid #000000",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      CGST @ 4.5% ({group.hsnCode})
+                    </td>
+                    <td
+                      style={{
+                        padding: "0.25rem 0.5rem",
+                        border: "1px solid #000000",
+                      }}
+                    >
+                      ₹{group.cgstAmount.toFixed(2)}
+                    </td>
+                  </tr>
+                  <tr style={{ border: "1px solid #000000" }}>
+                    <td
+                      colSpan="5"
+                      style={{
+                        padding: "0.25rem 0.5rem",
+                        textAlign: "right",
+                        border: "1px solid #000000",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      SGST @ 4.5% ({group.hsnCode})
+                    </td>
+                    <td
+                      style={{
+                        padding: "0.25rem 0.5rem",
+                        border: "1px solid #000000",
+                      }}
+                    >
+                      ₹{group.sgstAmount.toFixed(2)}
+                    </td>
+                  </tr>
+                </>
+              ) : (
+                // Different state: Show IGST
+                <tr style={{ border: "1px solid #000000" }}>
+                  <td
+                    colSpan="5"
+                    style={{
+                      padding: "0.25rem 0.5rem",
+                      textAlign: "right",
+                      border: "1px solid #000000",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    IGST @ 18% ({group.hsnCode})
+                  </td>
+                  <td
+                    style={{
+                      padding: "0.25rem 0.5rem",
+                      border: "1px solid #000000",
+                    }}
+                  >
+                    ₹{group.igstAmount.toFixed(2)}
+                  </td>
+                </tr>
+              )}
+            </React.Fragment>
+          ))}
+
           {/* Total Row */}
           <tr
             style={{ backgroundColor: "#E2E8F0", border: "1px solid #000000" }}
           >
             <td
-              colSpan="4"
+              colSpan="5"
               style={{
                 padding: "0.25rem 0.5rem",
                 textAlign: "right",
@@ -369,7 +540,7 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
         </tbody>
       </table>
 
-      {/* GST Summary Table */}
+      {/* Enhanced GST Summary Table */}
       <table
         style={{
           width: "100%",
@@ -392,12 +563,38 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
             >
               Taxable Value
             </th>
-            <th
-              style={{ padding: "0.25rem 0.5rem", border: "1px solid #000000" }}
-              colSpan="2"
-            >
-              IGST
-            </th>
+            {isIntraState ? (
+              <>
+                <th
+                  style={{
+                    padding: "0.25rem 0.5rem",
+                    border: "1px solid #000000",
+                  }}
+                  colSpan="2"
+                >
+                  CGST
+                </th>
+                <th
+                  style={{
+                    padding: "0.25rem 0.5rem",
+                    border: "1px solid #000000",
+                  }}
+                  colSpan="2"
+                >
+                  SGST
+                </th>
+              </>
+            ) : (
+              <th
+                style={{
+                  padding: "0.25rem 0.5rem",
+                  border: "1px solid #000000",
+                }}
+                colSpan="2"
+              >
+                IGST
+              </th>
+            )}
             <th
               style={{ padding: "0.25rem 0.5rem", border: "1px solid #000000" }}
             >
@@ -413,49 +610,153 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
             <th
               style={{ padding: "0.25rem 0.5rem", border: "1px solid #000000" }}
             ></th>
-            <th
-              style={{ padding: "0.25rem 0.5rem", border: "1px solid #000000" }}
-            >
-              Rate
-            </th>
-            <th
-              style={{ padding: "0.25rem 0.5rem", border: "1px solid #000000" }}
-            >
-              Amount
-            </th>
+            {isIntraState ? (
+              <>
+                <th
+                  style={{
+                    padding: "0.25rem 0.5rem",
+                    border: "1px solid #000000",
+                  }}
+                >
+                  Rate
+                </th>
+                <th
+                  style={{
+                    padding: "0.25rem 0.5rem",
+                    border: "1px solid #000000",
+                  }}
+                >
+                  Amount
+                </th>
+                <th
+                  style={{
+                    padding: "0.25rem 0.5rem",
+                    border: "1px solid #000000",
+                  }}
+                >
+                  Rate
+                </th>
+                <th
+                  style={{
+                    padding: "0.25rem 0.5rem",
+                    border: "1px solid #000000",
+                  }}
+                >
+                  Amount
+                </th>
+              </>
+            ) : (
+              <>
+                <th
+                  style={{
+                    padding: "0.25rem 0.5rem",
+                    border: "1px solid #000000",
+                  }}
+                >
+                  Rate
+                </th>
+                <th
+                  style={{
+                    padding: "0.25rem 0.5rem",
+                    border: "1px solid #000000",
+                  }}
+                >
+                  Amount
+                </th>
+              </>
+            )}
             <th
               style={{ padding: "0.25rem 0.5rem", border: "1px solid #000000" }}
             ></th>
           </tr>
         </thead>
         <tbody>
-          <tr style={{ border: "1px solid #000000" }}>
-            <td
-              style={{ padding: "0.25rem 0.5rem", border: "1px solid #000000" }}
-            >
-              {itemsMap[items[0]?.item_id]?.hsn_sac || "hsn_sac"}
-            </td>
-            <td
-              style={{ padding: "0.25rem 0.5rem", border: "1px solid #000000" }}
-            >
-              ₹{totalAmount}
-            </td>
-            <td
-              style={{ padding: "0.25rem 0.5rem", border: "1px solid #000000" }}
-            >
-              {gstPercentage || "18"}%
-            </td>
-            <td
-              style={{ padding: "0.25rem 0.5rem", border: "1px solid #000000" }}
-            >
-              ₹{gstAmount}
-            </td>
-            <td
-              style={{ padding: "0.25rem 0.5rem", border: "1px solid #000000" }}
-            >
-              ₹{gstAmount}
-            </td>
-          </tr>
+          {/* Render row for each HSN group */}
+          {hsnGroups.map((group, index) => (
+            <tr key={`hsn-${index}`} style={{ border: "1px solid #000000" }}>
+              <td
+                style={{
+                  padding: "0.25rem 0.5rem",
+                  border: "1px solid #000000",
+                }}
+              >
+                {group.hsnCode}
+              </td>
+              <td
+                style={{
+                  padding: "0.25rem 0.5rem",
+                  border: "1px solid #000000",
+                }}
+              >
+                ₹{group.totalAmount.toFixed(2)}
+              </td>
+              {isIntraState ? (
+                <>
+                  <td
+                    style={{
+                      padding: "0.25rem 0.5rem",
+                      border: "1px solid #000000",
+                    }}
+                  >
+                    4.5%
+                  </td>
+                  <td
+                    style={{
+                      padding: "0.25rem 0.5rem",
+                      border: "1px solid #000000",
+                    }}
+                  >
+                    ₹{group.cgstAmount.toFixed(2)}
+                  </td>
+                  <td
+                    style={{
+                      padding: "0.25rem 0.5rem",
+                      border: "1px solid #000000",
+                    }}
+                  >
+                    4.5%
+                  </td>
+                  <td
+                    style={{
+                      padding: "0.25rem 0.5rem",
+                      border: "1px solid #000000",
+                    }}
+                  >
+                    ₹{group.sgstAmount.toFixed(2)}
+                  </td>
+                </>
+              ) : (
+                <>
+                  <td
+                    style={{
+                      padding: "0.25rem 0.5rem",
+                      border: "1px solid #000000",
+                    }}
+                  >
+                    18%
+                  </td>
+                  <td
+                    style={{
+                      padding: "0.25rem 0.5rem",
+                      border: "1px solid #000000",
+                    }}
+                  >
+                    ₹{group.igstAmount.toFixed(2)}
+                  </td>
+                </>
+              )}
+              <td
+                style={{
+                  padding: "0.25rem 0.5rem",
+                  border: "1px solid #000000",
+                }}
+              >
+                ₹{group.gstAmount.toFixed(2)}
+              </td>
+            </tr>
+          ))}
+
+          {/* Total row */}
           <tr
             style={{ backgroundColor: "#E2E8F0", border: "1px solid #000000" }}
           >
@@ -475,20 +776,60 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
                 fontWeight: "bold",
               }}
             >
-              ₹{totalAmount}
+              ₹{totalAmount.toFixed(2)}
             </td>
-            <td
-              style={{ padding: "0.25rem 0.5rem", border: "1px solid #000000" }}
-            ></td>
-            <td
-              style={{
-                padding: "0.25rem 0.5rem",
-                border: "1px solid #000000",
-                fontWeight: "bold",
-              }}
-            >
-              ₹{gstAmount}
-            </td>
+            {isIntraState ? (
+              <>
+                <td
+                  style={{
+                    padding: "0.25rem 0.5rem",
+                    border: "1px solid #000000",
+                  }}
+                ></td>
+                <td
+                  style={{
+                    padding: "0.25rem 0.5rem",
+                    border: "1px solid #000000",
+                    fontWeight: "bold",
+                  }}
+                >
+                  ₹{(gstAmount / 2).toFixed(2)}
+                </td>
+                <td
+                  style={{
+                    padding: "0.25rem 0.5rem",
+                    border: "1px solid #000000",
+                  }}
+                ></td>
+                <td
+                  style={{
+                    padding: "0.25rem 0.5rem",
+                    border: "1px solid #000000",
+                    fontWeight: "bold",
+                  }}
+                >
+                  ₹{(gstAmount / 2).toFixed(2)}
+                </td>
+              </>
+            ) : (
+              <>
+                <td
+                  style={{
+                    padding: "0.25rem 0.5rem",
+                    border: "1px solid #000000",
+                  }}
+                ></td>
+                <td
+                  style={{
+                    padding: "0.25rem 0.5rem",
+                    border: "1px solid #000000",
+                    fontWeight: "bold",
+                  }}
+                >
+                  ₹{gstAmount}
+                </td>
+              </>
+            )}
             <td
               style={{
                 padding: "0.25rem 0.5rem",
@@ -501,6 +842,7 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
           </tr>
         </tbody>
       </table>
+
       <div
         style={{
           border: "1px solid #000000",

@@ -6,6 +6,7 @@ import dayjs from "dayjs";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useSearchParams } from "react-router-dom";
+import Navbar from "./Navbar";
 
 const InvoiceGenerator = () => {
   const { session } = UserAuth();
@@ -280,7 +281,8 @@ const InvoiceGenerator = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
-      <h2 className="text-2xl font-bold mb-6">
+      <Navbar />
+      <h2 className="text-2xl font-bold mb-6 mt-20">
         {isEditing ? "Edit Invoice" : "Create Invoice"}
       </h2>
 

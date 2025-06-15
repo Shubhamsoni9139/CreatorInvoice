@@ -14,6 +14,7 @@ import { supabase } from "../supabaseClient";
 import { UserAuth } from "../context/AuthContext";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+
 const CreatorProfile = () => {
   const { session } = UserAuth();
   const [profile, setProfile] = useState(null);
@@ -90,26 +91,27 @@ const CreatorProfile = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-[#0a0e1a] flex items-center justify-center">
         <div className="text-white text-lg">Loading profile...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 p-6">
-      <div className="mx-auto">
+    <div className="min-h-screen bg-[#0a0e1a] p-6">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="bg-gray-800 rounded-2xl p-6 mb-6 border border-gray-700">
-          <div className="flex items-center justify-between ">
-            <div className="flex items-center space-x-3">
-              <div className="w-2 h-8 bg-emerald-400 rounded-full"></div>
-              <h2 className="text-3xl font-bold text-white">
-                {isNewProfile ? "Create Your Profile" : "Edit Your Profile"}
-              </h2>
-            </div>
-          </div>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-white mb-2">
+            {isNewProfile ? "Create Your Profile" : "Edit Your Profile"}
+          </h1>
+          <p className="text-gray-400">
+            {isNewProfile
+              ? "Set up your creator profile to start managing invoices"
+              : "Update your profile information and settings"}
+          </p>
         </div>
+
         <ToastContainer
           position="top-right"
           autoClose={3000}
@@ -122,106 +124,113 @@ const CreatorProfile = () => {
           pauseOnHover
           theme="dark"
         />
+
         {/* Profile Form */}
-        <div className="bg-gray-800 rounded-2xl border border-gray-700 overflow-hidden">
-          <form onSubmit={handleSubmit} className="p-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bg-[#1a1f2e] rounded-2xl border border-gray-700/50 overflow-hidden shadow-xl">
+          <form onSubmit={handleSubmit} className="p-8">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-12">
               {/* Left Column - Personal Information */}
               <div className="space-y-6">
-                <h3 className="text-xl font-semibold text-white mb-4 flex items-center space-x-2">
-                  <User className="w-5 h-5 text-emerald-400" />
-                  <span>Personal Information</span>
-                </h3>
+                <div className="flex items-center space-x-3 mb-6">
+                  <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">
+                    <User className="w-4 h-4 text-white" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-white">
+                    Personal Information
+                  </h2>
+                </div>
 
-                <div className="space-y-4">
+                <div className="space-y-5">
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-3">
                       Full Name
                     </label>
                     <div className="relative">
-                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input
                         name="name"
-                        placeholder="Full Name"
+                        placeholder="Enter your full name"
                         value={editProfile.name || ""}
                         onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-4 bg-[#0f1419] border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-3">
                       Phone Number
                     </label>
                     <div className="relative">
-                      <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <Phone className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input
                         name="phone_number"
-                        placeholder="Phone Number"
+                        placeholder="Enter your phone number"
                         value={editProfile.phone_number || ""}
                         onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-4 bg-[#0f1419] border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-3">
                       Email Address
                     </label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input
                         name="email"
                         value={editProfile.email || ""}
                         disabled
-                        className="w-full pl-10 pr-4 py-3 bg-gray-600 border border-gray-600 rounded-lg text-gray-400 cursor-not-allowed"
+                        className="w-full pl-12 pr-4 py-4 bg-gray-700/30 border border-gray-600/30 rounded-xl text-gray-400 cursor-not-allowed"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-3">
                       PAN Number
                     </label>
                     <div className="relative">
-                      <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <Hash className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input
                         name="pan_number"
-                        placeholder="PAN Number"
+                        placeholder="Enter PAN number"
                         value={editProfile.pan_number || ""}
                         onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-4 bg-[#0f1419] border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-3">
                       GST Number{" "}
-                      <span className="text-gray-500">(optional)</span>
+                      <span className="text-gray-500 text-xs">(optional)</span>
                     </label>
                     <div className="relative">
-                      <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <Building className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input
                         name="gst_number"
-                        placeholder="GST Number (optional)"
+                        placeholder="Enter GST number (optional)"
                         value={editProfile.gst_number || ""}
                         onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-4 bg-[#0f1419] border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                       />
                     </div>
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Invoice Prefix (optional)
+                    <label className="block text-sm font-medium text-gray-300 mb-3">
+                      Invoice Prefix{" "}
+                      <span className="text-gray-500 text-xs">(optional)</span>
                     </label>
                     <div className="relative">
-                      <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <Hash className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input
                         name="prefix"
-                        placeholder="Invoice Prefix (optional)"
+                        placeholder="e.g., SHUB"
                         value={editProfile.prefix || ""}
                         onChange={(e) =>
                           handleChange({
@@ -231,50 +240,58 @@ const CreatorProfile = () => {
                             },
                           })
                         }
-                        className="w-full pl-10 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-4 bg-[#0f1419] border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                       />
                     </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      This will be used as a prefix for your invoice numbers
+                    </p>
                   </div>
                 </div>
               </div>
 
               {/* Right Column - Address & Banking Information */}
               <div className="space-y-6">
-                <h3 className="text-xl font-semibold text-white mb-4 flex items-center space-x-2">
-                  <CreditCard className="w-5 h-5 text-emerald-400" />
-                  <span>Address & Banking</span>
-                </h3>
+                <div className="flex items-center space-x-3 mb-6">
+                  <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">
+                    <CreditCard className="w-4 h-4 text-white" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-white">
+                    Address & Banking
+                  </h2>
+                </div>
 
-                <div className="space-y-4">
+                <div className="space-y-5">
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-3">
                       Address
                     </label>
                     <div className="relative">
-                      <MapPin className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                      <MapPin className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
                       <textarea
                         name="address"
-                        placeholder="Address"
+                        placeholder="Enter your complete address"
                         value={editProfile.address || ""}
                         onChange={handleChange}
-                        rows={3}
-                        className="w-full pl-10 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all resize-none"
+                        rows={4}
+                        className="w-full pl-12 pr-4 py-4 bg-[#0f1419] border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all resize-none"
                       />
                     </div>
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Address State
+                    <label className="block text-sm font-medium text-gray-300 mb-3">
+                      State
                     </label>
                     <div className="relative">
-                      <Landmark className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                      <Landmark className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none z-10" />
                       <select
                         name="state"
                         value={editProfile.state || ""}
                         onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all appearance-none"
+                        className="w-full pl-12 pr-4 py-4 bg-[#0f1419] border border-gray-600/50 rounded-xl text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all appearance-none cursor-pointer"
                       >
-                        <option value="" disabled>
+                        <option value="" disabled className="bg-[#0f1419]">
                           Select your state
                         </option>
                         {[
@@ -311,7 +328,11 @@ const CreatorProfile = () => {
                           "Ladakh",
                           "Puducherry",
                         ].map((state) => (
-                          <option key={state} value={state}>
+                          <option
+                            key={state}
+                            value={state}
+                            className="bg-[#0f1419]"
+                          >
                             {state}
                           </option>
                         ))}
@@ -320,49 +341,49 @@ const CreatorProfile = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-3">
                       Bank Name
                     </label>
                     <div className="relative">
-                      <Landmark className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <Landmark className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input
                         name="bank_name"
-                        placeholder="Bank Name"
+                        placeholder="Enter bank name"
                         value={editProfile.bank_name || ""}
                         onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-4 bg-[#0f1419] border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-3">
                       Account Number
                     </label>
                     <div className="relative">
-                      <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <Hash className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input
                         name="account_number"
-                        placeholder="Account Number"
+                        placeholder="Enter account number"
                         value={editProfile.account_number || ""}
                         onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-4 bg-[#0f1419] border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-3">
                       IFSC Code
                     </label>
                     <div className="relative">
-                      <Code className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <Code className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input
                         name="ifsc_code"
-                        placeholder="IFSC Code"
+                        placeholder="Enter IFSC code"
                         value={editProfile.ifsc_code || ""}
                         onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-4 bg-[#0f1419] border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                       />
                     </div>
                   </div>
@@ -371,12 +392,22 @@ const CreatorProfile = () => {
             </div>
 
             {/* Submit Button */}
-            <div className="mt-8 pt-6 border-t border-gray-700">
+            <div className="mt-10 pt-8 border-t border-gray-700/50">
               <button
                 type="submit"
-                className="w-full py-4 bg-emerald-500 text-white font-semibold rounded-lg hover:bg-emerald-600 transition-colors focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-gray-800"
+                disabled={loading}
+                className="w-full py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-semibold rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all duration-200 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-[#1a1f2e] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
               >
-                {isNewProfile ? "Create Profile" : "Update Profile"}
+                {loading ? (
+                  <div className="flex items-center justify-center space-x-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Saving...</span>
+                  </div>
+                ) : (
+                  <span>
+                    {isNewProfile ? "Create Profile" : "Update Profile"}
+                  </span>
+                )}
               </button>
             </div>
           </form>

@@ -1,309 +1,608 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import {
+  DollarSign,
+  FileText,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  Users,
+  TrendingUp,
+  Calendar,
+  RefreshCw,
+} from "lucide-react";
 import { UserAuth } from "../context/AuthContext";
-
+import Navbar from "./Navbar";
+import { Link } from "react-router-dom";
 const Dashboard = () => {
-  const { session, signOut } = UserAuth();
-  const navigate = useNavigate();
-  const handleApplyClick = () => {
-    navigate("/dashboard/profile");
-  };
-  const handleSignOut = async (e) => {
-    e.preventDefault();
+  const { session } = UserAuth();
+  const [invoices, setInvoices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [updatingStatus, setUpdatingStatus] = useState(null); // Track which invoice is being updated
+  const [creator, setCreator] = useState(null);
 
+  // Fetch creator data
+  const fetchCreator = async () => {
     try {
-      await signOut();
-      navigate("/");
+      if (!session?.user?.id) return;
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/creators?user_id=eq.${
+          session.user.id
+        }&select=*`,
+        {
+          headers: {
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data && data.length > 0) {
+        setCreator(data[0]);
+      }
     } catch (err) {
-      setError("An unexpected error occurred."); // Catch unexpected errors
+      console.error("Error fetching creator:", err);
     }
   };
-  console.log(session);
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      fetchCreator();
+    }
+  }, [session]);
+
+  // Fetch invoices from Supabase
+  const fetchInvoices = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      if (!session?.user?.id) {
+        setError("User not authenticated");
+        setLoading(false);
+        return;
+      }
+
+      // Using fetch to call Supabase REST API
+      const response = await fetch(
+        `${
+          import.meta.env.VITE_SUPABASE_URL
+        }/rest/v1/invoices?select=*,customers(brand_name)&user_id=eq.${
+          session.user.id
+        }&order=created_at.desc`,
+        {
+          headers: {
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setInvoices(data);
+    } catch (err) {
+      console.error("Error fetching invoices:", err);
+      setError(err.message);
+      // Fallback to mock data for demonstration
+      setInvoices([
+        {
+          invoice_id: "1",
+          invoice_number: "INV-2025-001",
+          customers: { brand_name: "Tech Corp Ltd" },
+          invoice_date: "2025-06-10",
+          total_amount: 12500.0,
+          gst_amount: 1875.0,
+          net_amount: 14375.0,
+          status: "paid",
+          notes: "Monthly service charge",
+          created_at: "2025-06-10T10:30:00Z",
+        },
+        {
+          invoice_id: "2",
+          invoice_number: "INV-2025-002",
+          customers: { brand_name: "StartUp Inc" },
+          invoice_date: "2025-06-12",
+          total_amount: 8750.0,
+          gst_amount: 1312.5,
+          net_amount: 10062.5,
+          status: "unpaid",
+          notes: "Website development",
+          created_at: "2025-06-12T14:20:00Z",
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Update invoice status
+  const updateInvoiceStatus = async (invoiceId, newStatus) => {
+    try {
+      setUpdatingStatus(invoiceId); // Show loading state for this specific invoice
+
+      const response = await fetch(
+        `${
+          import.meta.env.VITE_SUPABASE_URL
+        }/rest/v1/invoices?invoice_id=eq.${invoiceId}`,
+        {
+          method: "PATCH",
+          headers: {
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+            Prefer: "return=minimal",
+          },
+          body: JSON.stringify({ status: newStatus }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Update local state
+      setInvoices((prevInvoices) =>
+        prevInvoices.map((invoice) =>
+          invoice.invoice_id === invoiceId
+            ? { ...invoice, status: newStatus }
+            : invoice
+        )
+      );
+
+      // Show success message
+      alert(`Invoice status updated to ${newStatus}`);
+    } catch (err) {
+      console.error("Error updating invoice status:", err);
+      alert("Failed to update invoice status. Please try again.");
+    } finally {
+      setUpdatingStatus(null); // Clear loading state
+    }
+  };
+
+  useEffect(() => {
+    fetchInvoices();
+  }, [session]);
+
+  const [stats, setStats] = useState({
+    totalRevenue: 0,
+    paidAmount: 0,
+    pendingAmount: 0,
+    overdueAmount: 0,
+    totalInvoices: 0,
+    paidInvoices: 0,
+    pendingInvoices: 0,
+    overdueInvoices: 0,
+  });
+
+  const [filterStatus, setFilterStatus] = useState("all");
+
+  // Calculate statistics from actual invoice data
+  useEffect(() => {
+    const newStats = invoices.reduce(
+      (acc, invoice) => {
+        const netAmount = parseFloat(invoice.net_amount) || 0;
+        acc.totalRevenue += netAmount;
+        acc.totalInvoices += 1;
+
+        switch (invoice.status) {
+          case "paid":
+            acc.paidAmount += netAmount;
+            acc.paidInvoices += 1;
+            break;
+          case "unpaid":
+            // Check if overdue (more than 30 days)
+            const invoiceDate = new Date(invoice.invoice_date);
+            const today = new Date();
+            const daysDiff = (today - invoiceDate) / (1000 * 60 * 60 * 24);
+
+            if (daysDiff > 30) {
+              acc.overdueAmount += netAmount;
+              acc.overdueInvoices += 1;
+            } else {
+              acc.pendingAmount += netAmount;
+              acc.pendingInvoices += 1;
+            }
+            break;
+          default:
+            acc.pendingAmount += netAmount;
+            acc.pendingInvoices += 1;
+            break;
+        }
+        return acc;
+      },
+      {
+        totalRevenue: 0,
+        paidAmount: 0,
+        pendingAmount: 0,
+        overdueAmount: 0,
+        totalInvoices: 0,
+        paidInvoices: 0,
+        pendingInvoices: 0,
+        overdueInvoices: 0,
+      }
+    );
+
+    setStats(newStats);
+  }, [invoices]);
+
+  const handleSignOut = async (e) => {
+    e.preventDefault();
+    try {
+      // Add your sign out logic here
+      console.log("Signing out...");
+    } catch (err) {
+      console.error("Sign out error:", err);
+    }
+  };
+
+  const getStatusBadge = (status) => {
+    const baseClasses = "px-3 py-1 rounded-full text-xs font-semibold";
+    switch (status?.toLowerCase()) {
+      case "paid":
+        return `${baseClasses} bg-green-100 text-green-800`;
+      case "unpaid":
+        return `${baseClasses} bg-red-100 text-red-800`;
+      default:
+        return `${baseClasses} bg-gray-100 text-gray-800`;
+    }
+  };
+
+  const getStatusIcon = (status, invoiceDate) => {
+    // Check if unpaid invoice is overdue
+    const isOverdue =
+      status === "unpaid" &&
+      invoiceDate &&
+      (new Date() - new Date(invoiceDate)) / (1000 * 60 * 60 * 24) > 30;
+
+    switch (status?.toLowerCase()) {
+      case "paid":
+        return <CheckCircle className="w-4 h-4 text-green-600" />;
+      case "unpaid":
+        return isOverdue ? (
+          <AlertCircle className="w-4 h-4 text-red-600" />
+        ) : (
+          <Clock className="w-4 h-4 text-yellow-600" />
+        );
+      default:
+        return <FileText className="w-4 h-4 text-gray-600" />;
+    }
+  };
+
+  // Filter invoices based on status, including overdue logic
+  const filteredInvoices =
+    filterStatus === "all"
+      ? invoices
+      : filterStatus === "overdue"
+      ? invoices.filter((invoice) => {
+          if (invoice.status !== "unpaid") return false;
+          const daysDiff =
+            (new Date() - new Date(invoice.invoice_date)) /
+            (1000 * 60 * 60 * 24);
+          return daysDiff > 30;
+        })
+      : invoices.filter((invoice) => invoice.status === filterStatus);
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+    }).format(amount);
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
   return (
-    <div class="bg-gradient-to-b from-[#101212] relative to-[#08201D]">
-      <header class="absolute inset-x-0 top-0 z-10 w-full ">
-        <div class="px-4 mx-auto sm:px-6 lg:px-8 bg-gradient-to-r from-green-300 to-black  rounded-full mt-2 ml-2 mr-2">
-          <div class="flex items-center justify-between h-16 lg:h-20">
-            <div class="flex-shrink-0">
-              <a href="" title="" class="flex">
-                <img
-                  class="w-full h-15"
-                  src="https://framerusercontent.com/images/htoS18uygJMvEeokrXH2TSdQGg0.png"
-                  alt=""
-                />
-              </a>
+    <div className="bg-gradient-to-b from-[#101212] to-[#08201D] min-h-screen">
+      {/* Header */}
+      <Navbar />
+      {/* Main Content */}
+      <div className="pt-24 pb-10 px-4 mx-auto max-w-7xl sm:px-6 lg:px-8 bg-gradient-to-b from-[#101212] to-[#08201D]">
+        {/* Welcome Section */}
+        <div className="text-center mb-12 mt-10">
+          <h1 className="text-4xl font-bold text-white sm:text-5xl mb-4">
+            Welcome,{" "}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-300 to-white">
+              {creator?.name || "User"}
+            </span>
+          </h1>
+          <p className="text-lg text-gray-300">
+            Track and manage all your invoices and payments in one place
+          </p>
+          {error && (
+            <div className="mt-4 p-4 bg-red-500/20 border border-red-500/30 rounded-lg">
+              <p className="text-red-300">Error: {error}</p>
+              <button
+                onClick={fetchInvoices}
+                className="mt-2 text-sm text-red-400 hover:text-red-300 flex items-center justify-center mx-auto"
+              >
+                <RefreshCw className="w-4 h-4 mr-1" />
+                Retry
+              </button>
             </div>
+          )}
+        </div>
 
-            <div class="hidden lg:flex lg:items-center lg:justify-center lg:space-x-10 ml-5">
-              <a
-                href="/dashboard/items"
-                title=""
-                class="text-base text-Black transition-all duration-200 hover:text-opacity-80"
-              >
-                {" "}
-                Items{" "}
-              </a>
-
-              <a
-                href="/dashboard/customer"
-                title=""
-                class="text-base text-Black transition-all duration-200 hover:text-opacity-80"
-              >
-                {" "}
-                Customer{" "}
-              </a>
-
-              <a
-                href="/dashboard/invoice"
-                title=""
-                class="text-base text-Black transition-all duration-200 hover:text-opacity-80"
-              >
-                {" "}
-                Create{" "}
-              </a>
-              <a
-                href="/dashboard/all"
-                title=""
-                class="text-base text-Black transition-all duration-200 hover:text-opacity-80"
-              >
-                {" "}
-                Invoices{" "}
-              </a>
-            </div>
-
-            <div class="lg:flex lg:items-center lg:justify-end lg:space-x-6 sm:ml-auto">
-              <a
-                href="#"
-                title=""
-                onClick={handleSignOut}
-                class="hidden text-base text-white transition-all duration-200 lg:inline-flex hover:text-opacity-80"
-              >
-                {" "}
-                Sign Out{" "}
-              </a>
-
-              <a
-                title=""
-                href="/dashboard/profile"
-                class="inline-flex items-center justify-center px-3 sm:px-5 py-2.5 text-sm sm:text-base font-semibold transition-all duration-200 text-white bg-white/20 hover:bg-white/40 focus:bg-white/40 rounded-lg"
-                role="button"
-              >
-                {" "}
-                Profile{" "}
-              </a>
-            </div>
-
-            <button
-              type="button"
-              class="inline-flex p-2 ml-1 text-white transition-all duration-200 rounded-md sm:ml-4 lg:hidden focus:bg-gray-800 hover:bg-gray-800"
-            >
-              <svg
-                class="block w-6 h-6"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M4 6h16M4 12h16m-7 6h7"
-                />
-              </svg>
-              <svg
-                class="hidden w-6 h-6"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M6 18L18 6M6 6l12 12"
-                ></path>
-              </svg>
-            </button>
+        {loading ? (
+          <div className="flex justify-center items-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-400"></div>
           </div>
-        </div>
-      </header>
-
-      <section class="relative lg:min-h-[1000px] pt-24 pb-10 sm:pt-32 sm:pb-16 lg:pb-24">
-        <div class="absolute inset-x-0 bottom-0 z-10 hidden lg:flex">
-          <img
-            class="hidden w-full lg:block"
-            src="https://cdn.rareblocks.xyz/collection/celebration/images/hero/5/credit-cards.png"
-            alt=""
-          />
-          <img
-            class="block w-full lg:hidden"
-            src="https://cdn.rareblocks.xyz/collection/celebration/images/hero/5/credit-cards-mobile.png"
-            alt=""
-          />
-        </div>
-
-        <div class="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8 relative z-20">
-          <div class="max-w-xl mx-auto text-center">
-            <h1 class="text-4xl font-bold sm:text-6xl">
-              <h2>Welcome, {session?.user?.email}</h2>
-              <span class="text-transparent bg-clip-text bg-gradient-to-r from-green-300 to-white">
-                {" "}
-                Simplified credit cards for students{" "}
-              </span>
-            </h1>
-            <p class="mt-5 text-base text-white sm:text-xl">
-              No more hassle taking loans and making payments. Try Postcrats
-              credit card, make your life simple.
-            </p>
-
-            <a
-              href="#"
-              title=""
-              class="inline-flex items-center px-6 py-4 mt-8 font-semibold text-white transition-all duration-200 bg-blue-600 rounded-lg sm:mt-16 hover:bg-blue-700 focus:bg-blue-700"
-              role="button"
-            >
-              Apply for free
-              <svg
-                class="w-6 h-6 ml-8 -mr-2"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="1.5"
-                  d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            </a>
-
-            <div class="grid grid-cols-1 px-20 mt-12 text-left gap-x-12 gap-y-8 sm:grid-cols-3 sm:px-0">
-              <div class="flex items-center">
-                <svg
-                  class="flex-shrink-0"
-                  width="31"
-                  height="25"
-                  viewBox="0 0 31 25"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M25.1667 14.187H20.3333C17.6637 14.187 15.5 16.3507 15.5 19.0203V19.8258C15.5 19.8258 18.0174 20.6314 22.75 20.6314C27.4826 20.6314 30 19.8258 30 19.8258V19.0203C30 16.3507 27.8363 14.187 25.1667 14.187Z"
-                    stroke="#28CC9D"
-                    stroke-width="1.5"
-                    stroke-miterlimit="10"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                  <path
-                    d="M18.7227 6.9369C18.7227 4.71276 20.5263 2.90912 22.7504 2.90912C24.9746 2.90912 26.7782 4.71276 26.7782 6.9369C26.7782 9.16104 24.9746 11.7702 22.7504 11.7702C20.5263 11.7702 18.7227 9.16104 18.7227 6.9369Z"
-                    stroke="#28CC9D"
-                    stroke-width="1.5"
-                    stroke-miterlimit="10"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                  <path
-                    d="M13.2231 15.8512H7.11157C3.73595 15.8512 1 18.5871 1 21.9628V22.9814C1 22.9814 4.18311 24 10.1674 24C16.1516 24 19.3347 22.9814 19.3347 22.9814V21.9628C19.3347 18.5871 16.5988 15.8512 13.2231 15.8512Z"
-                    fill="#0B1715"
-                    stroke="white"
-                    stroke-width="1.5"
-                    stroke-miterlimit="10"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                  <path
-                    d="M5.07422 6.68386C5.07422 3.87152 7.35485 1.59088 10.1672 1.59088C12.9795 1.59088 15.2602 3.87152 15.2602 6.68386C15.2602 9.4962 12.9795 12.7954 10.1672 12.7954C7.35485 12.7954 5.07422 9.4962 5.07422 6.68386Z"
-                    fill="#0B1715"
-                    stroke="white"
-                    stroke-width="1.5"
-                    stroke-miterlimit="10"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-                <p class="ml-3 text-sm text-white">
-                  Over 12,000 students joined
-                </p>
+        ) : (
+          <>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-300">Total Revenue</p>
+                    <p className="text-2xl font-bold text-white">
+                      {formatCurrency(stats.totalRevenue)}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-green-500/20 rounded-full">
+                    <TrendingUp className="w-6 h-6 text-green-400" />
+                  </div>
+                </div>
               </div>
 
-              <div class="flex items-center">
-                <svg
-                  class="flex-shrink-0"
-                  width="23"
-                  height="23"
-                  viewBox="0 0 23 23"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M19.8335 21.9166H3.16683C2.6143 21.9166 2.08439 21.6972 1.69369 21.3065C1.30299 20.9158 1.0835 20.3858 1.0835 19.8333V3.16665C1.0835 2.61411 1.30299 2.08421 1.69369 1.69351C2.08439 1.30281 2.6143 1.08331 3.16683 1.08331H19.8335C20.386 1.08331 20.9159 1.30281 21.3066 1.69351C21.6973 2.08421 21.9168 2.61411 21.9168 3.16665V19.8333C21.9168 20.3858 21.6973 20.9158 21.3066 21.3065C20.9159 21.6972 20.386 21.9166 19.8335 21.9166Z"
-                    stroke="white"
-                    stroke-width="1.5"
-                    stroke-miterlimit="10"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                  <path
-                    d="M7 12.6667L9.25 15L16 8"
-                    stroke="#28CC9D"
-                    stroke-width="1.5"
-                    stroke-miterlimit="10"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-                <p class="ml-3 text-sm text-white">
-                  No yearly charges, maximum limits
-                </p>
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-300">Paid Amount</p>
+                    <p className="text-2xl font-bold text-green-400">
+                      {formatCurrency(stats.paidAmount)}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-green-500/20 rounded-full">
+                    <CheckCircle className="w-6 h-6 text-green-400" />
+                  </div>
+                </div>
               </div>
 
-              <div class="flex items-center">
-                <svg
-                  class="flex-shrink-0"
-                  width="20"
-                  height="24"
-                  viewBox="0 0 20 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M17 11H3C1.89543 11 1 11.8954 1 13V21C1 22.1046 1.89543 23 3 23H17C18.1046 23 19 22.1046 19 21V13C19 11.8954 18.1046 11 17 11Z"
-                    stroke="white"
-                    stroke-width="1.5"
-                    stroke-miterlimit="10"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                  <path
-                    d="M10 19C11.1046 19 12 18.1046 12 17C12 15.8954 11.1046 15 10 15C8.89543 15 8 15.8954 8 17C8 18.1046 8.89543 19 10 19Z"
-                    stroke="#28CC9D"
-                    stroke-width="1.5"
-                    stroke-miterlimit="10"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                  <path
-                    d="M15 7V6C15.0131 4.68724 14.5042 3.42303 13.5853 2.48539C12.6664 1.54776 11.4128 1.01346 10.1 1H10C8.68724 0.986939 7.42303 1.4958 6.48539 2.41469C5.54776 3.33357 5.01346 4.58724 5 5.9V7"
-                    stroke="#28CC9D"
-                    stroke-width="1.5"
-                    stroke-miterlimit="10"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-                <p class="ml-3 text-sm text-white">
-                  Secured & safe online payment
-                </p>
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-300">Pending Amount</p>
+                    <p className="text-2xl font-bold text-yellow-400">
+                      {formatCurrency(stats.pendingAmount)}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-yellow-500/20 rounded-full">
+                    <Clock className="w-6 h-6 text-yellow-400" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-300">Overdue Amount</p>
+                    <p className="text-2xl font-bold text-red-400">
+                      {formatCurrency(stats.overdueAmount)}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-red-500/20 rounded-full">
+                    <AlertCircle className="w-6 h-6 text-red-400" />
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
+
+            {/* Filter Tabs */}
+            <div className="flex flex-wrap gap-4 mb-6">
+              <button
+                onClick={() => setFilterStatus("all")}
+                className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                  filterStatus === "all"
+                    ? "bg-green-600 text-white"
+                    : "bg-white/10 text-gray-300 hover:bg-white/20"
+                }`}
+              >
+                All Invoices ({stats.totalInvoices})
+              </button>
+              <button
+                onClick={() => setFilterStatus("paid")}
+                className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                  filterStatus === "paid"
+                    ? "bg-green-600 text-white"
+                    : "bg-white/10 text-gray-300 hover:bg-white/20"
+                }`}
+              >
+                Paid ({stats.paidInvoices})
+              </button>
+              <button
+                onClick={() => setFilterStatus("unpaid")}
+                className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                  filterStatus === "unpaid"
+                    ? "bg-green-600 text-white"
+                    : "bg-white/10 text-gray-300 hover:bg-white/20"
+                }`}
+              >
+                Unpaid ({stats.pendingInvoices})
+              </button>
+              <button
+                onClick={() => setFilterStatus("overdue")}
+                className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                  filterStatus === "overdue"
+                    ? "bg-red-600 text-white"
+                    : "bg-white/10 text-gray-300 hover:bg-white/20"
+                }`}
+              >
+                Overdue ({stats.overdueInvoices})
+              </button>
+            </div>
+
+            {/* Invoices Table */}
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-white/5">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                        Invoice
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                        Customer
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                        Date
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                        Amount
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                        GST
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                        Total
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                        Status
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/10">
+                    {filteredInvoices.map((invoice) => (
+                      <tr
+                        key={invoice.invoice_id}
+                        className="hover:bg-white/5 transition-colors"
+                      >
+                        <td className="px-6 py-4">
+                          <div className="flex items-center">
+                            {getStatusIcon(
+                              invoice.status,
+                              invoice.invoice_date
+                            )}
+                            <div className="ml-3">
+                              <p className="text-sm font-medium text-white">
+                                {invoice.invoice_number}
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                {invoice.notes}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-sm text-white">
+                            {invoice.customers?.brand_name ||
+                              invoice.brand_name}
+                          </p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-sm text-gray-300">
+                            {formatDate(invoice.invoice_date)}
+                          </p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-sm text-white">
+                            {formatCurrency(invoice.total_amount)}
+                          </p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-sm text-gray-300">
+                            {formatCurrency(invoice.gst_amount)}
+                          </p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-sm font-medium text-white">
+                            {formatCurrency(invoice.net_amount)}
+                          </p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={getStatusBadge(invoice.status)}>
+                            {invoice.status.charAt(0).toUpperCase() +
+                              invoice.status.slice(1)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex space-x-2">
+                            {invoice.status === "paid" ? (
+                              <button
+                                onClick={() =>
+                                  updateInvoiceStatus(
+                                    invoice.invoice_id,
+                                    "unpaid"
+                                  )
+                                }
+                                disabled={updatingStatus === invoice.invoice_id}
+                                className={`text-sm transition-colors ${
+                                  updatingStatus === invoice.invoice_id
+                                    ? "text-gray-400 cursor-not-allowed"
+                                    : "text-red-400 hover:text-red-300"
+                                }`}
+                              >
+                                {updatingStatus === invoice.invoice_id
+                                  ? "Updating..."
+                                  : "Mark Unpaid"}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() =>
+                                  updateInvoiceStatus(
+                                    invoice.invoice_id,
+                                    "paid"
+                                  )
+                                }
+                                disabled={updatingStatus === invoice.invoice_id}
+                                className={`text-sm transition-colors ${
+                                  updatingStatus === invoice.invoice_id
+                                    ? "text-gray-400 cursor-not-allowed"
+                                    : "text-yellow-400 hover:text-yellow-300"
+                                }`}
+                              >
+                                {updatingStatus === invoice.invoice_id
+                                  ? "Updating..."
+                                  : "Mark Paid"}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="mt-8 flex flex-wrap gap-4 justify-center">
+              <Link to="/dashboard/invoice">
+                <button className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center">
+                  <FileText className="w-5 h-5 mr-2" />
+                  Create New Invoice
+                </button>
+              </Link>
+              <Link to="/dashboard/customer">
+                <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center">
+                  <Users className="w-5 h-5 mr-2" />
+                  Add Customer
+                </button>
+              </Link>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 };
