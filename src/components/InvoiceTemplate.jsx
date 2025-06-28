@@ -214,11 +214,7 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
               fontSize: "10px",
             }}
           >
-            <img
-              src="https://framerusercontent.com/images/htoS18uygJMvEeokrXH2TSdQGg0.png"
-              alt="Company Logo"
-              style={{ width: "100%", height: "100%", objectFit: "contain" }}
-            />
+            <span className="text-3xl font-extrabold text-black">CI</span>
           </div>
           <div>
             <h1

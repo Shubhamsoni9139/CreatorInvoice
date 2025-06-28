@@ -61,7 +61,10 @@ const InvoiceGenerator = () => {
       .eq("user_id", userId)
       .single();
 
-    if (error) toast.error("Error fetching creator");
+    if (error)
+      toast.error(
+        "Error fetching Cretor data first fill all you details in the profile section"
+      );
     else setCreator(data);
   };
 

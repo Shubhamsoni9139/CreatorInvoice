@@ -62,11 +62,9 @@ const Navbar = () => {
         <div className="flex items-center justify-between h-16 lg:h-20">
           <div className="flex-shrink-0">
             <Link to="/dashboard" className="flex">
-              <img
-                className="w-full h-15"
-                src="https://framerusercontent.com/images/htoS18uygJMvEeokrXH2TSdQGg0.png"
-                alt="Logo"
-              />
+              <span className="text-3xl font-extrabold text-black">
+                CreatorIn
+              </span>
             </Link>
           </div>
 
