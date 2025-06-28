@@ -195,7 +195,7 @@ function Home() {
             <div className="flex items-center space-x-8">
               <div className="flex items-center space-x-3">
                 <img
-                  src="/CreatorInvoice.png"
+                  src="https://invoice-ab25.vercel.app/assets/CreatorInvoice-DYdIy_X_.png"
                   alt="CreatorInvoice Logo"
                   className="w-10 h-10 rounded-lg object-contain"
                 />
