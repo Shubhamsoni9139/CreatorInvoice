@@ -62,8 +62,8 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
       const baseAmount = grouped[hsnCode].totalAmount;
       if (isIntraState) {
         // Same state: CGST + SGST (4.5% each for total 9%)
-        grouped[hsnCode].cgstAmount = baseAmount * 0.045;
-        grouped[hsnCode].sgstAmount = baseAmount * 0.045;
+        grouped[hsnCode].cgstAmount = baseAmount * 0.09;
+        grouped[hsnCode].sgstAmount = baseAmount * 0.09;
         grouped[hsnCode].gstAmount =
           grouped[hsnCode].cgstAmount + grouped[hsnCode].sgstAmount;
       } else {
@@ -211,12 +211,16 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
           >
             {creator?.logo ? (
               <img
-                src={creator.logo}
-                alt="Logo"
+                src="https://framerusercontent.com/images/htoS18uygJMvEeokrXH2TSdQGg0.png"
+                alt="images"
                 style={{ width: "100%", height: "100%", objectFit: "contain" }}
               />
             ) : (
-              "LOGO"
+              <img
+                src="https://framerusercontent.com/images/htoS18uygJMvEeokrXH2TSdQGg0.png"
+                alt="images"
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+              />
             )}
           </div>
           <div>
@@ -450,7 +454,7 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
                         fontWeight: "bold",
                       }}
                     >
-                      CGST @ 4.5% ({group.hsnCode})
+                      CGST @ 9% ({group.hsnCode})
                     </td>
                     <td
                       style={{
@@ -471,7 +475,7 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
                         fontWeight: "bold",
                       }}
                     >
-                      SGST @ 4.5% ({group.hsnCode})
+                      SGST @ 9% ({group.hsnCode})
                     </td>
                     <td
                       style={{
@@ -698,7 +702,7 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
                       border: "1px solid #000000",
                     }}
                   >
-                    4.5%
+                    9%
                   </td>
                   <td
                     style={{
@@ -714,7 +718,7 @@ const InvoiceTemplate = ({ invoice, creator, customer, items, itemsMap }) => {
                       border: "1px solid #000000",
                     }}
                   >
-                    4.5%
+                    9%
                   </td>
                   <td
                     style={{

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { UserAuth } from "../context/AuthContext";
 import { Link } from "react-router-dom";
-
+import { supabase } from "../supabaseClient";
 const Navbar = () => {
   const { session } = UserAuth();
   const [creator, setCreator] = useState(null);
@@ -46,10 +46,13 @@ const Navbar = () => {
   const handleSignOut = async (e) => {
     e.preventDefault();
     try {
-      // Add your sign out logic here
-      console.log("Signing out...");
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      console.log("Successfully signed out!");
+      // Optionally redirect the user
+      // navigate("/login"); or window.location.href = "/login";
     } catch (err) {
-      console.error("Sign out error:", err);
+      console.error("Sign out error:", err.message);
     }
   };
 

@@ -96,32 +96,6 @@ const Dashboard = () => {
       console.error("Error fetching invoices:", err);
       setError(err.message);
       // Fallback to mock data for demonstration
-      setInvoices([
-        {
-          invoice_id: "1",
-          invoice_number: "INV-2025-001",
-          customers: { brand_name: "Tech Corp Ltd" },
-          invoice_date: "2025-06-10",
-          total_amount: 12500.0,
-          gst_amount: 1875.0,
-          net_amount: 14375.0,
-          status: "paid",
-          notes: "Monthly service charge",
-          created_at: "2025-06-10T10:30:00Z",
-        },
-        {
-          invoice_id: "2",
-          invoice_number: "INV-2025-002",
-          customers: { brand_name: "StartUp Inc" },
-          invoice_date: "2025-06-12",
-          total_amount: 8750.0,
-          gst_amount: 1312.5,
-          net_amount: 10062.5,
-          status: "unpaid",
-          notes: "Website development",
-          created_at: "2025-06-12T14:20:00Z",
-        },
-      ]);
     } finally {
       setLoading(false);
     }
