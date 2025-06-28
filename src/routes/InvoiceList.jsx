@@ -5,6 +5,43 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { useNavigate } from "react-router-dom";
 import InvoiceTemplate from "../components/InvoiceTemplate";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import {
+  TrendingUp,
+  CheckCircle,
+  Clock,
+  AlertTriangle,
+  Plus,
+  Users,
+  FileText,
+  DollarSign,
+  Calendar,
+  Download,
+  Eye,
+  MoreHorizontal,
+  Edit3,
+  Trash2,
+  Filter,
+  Search,
+  X,
+  Home,
+  Settings,
+  Share2,
+  Sparkles,
+  Target,
+  Zap,
+  Shield,
+  CreditCard,
+  Building,
+  Hash,
+  Percent,
+  ArrowRight,
+  RefreshCw,
+  BarChart3,
+  PieChart,
+  Activity,
+} from "lucide-react";
 
 const InvoiceList = () => {
   const { session } = UserAuth();
@@ -19,6 +56,10 @@ const InvoiceList = () => {
   const [creator, setCreator] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [activeFilter, setActiveFilter] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("created_at");
+  const [sortOrder, setSortOrder] = useState("desc");
+  const [generatingPDF, setGeneratingPDF] = useState(false);
 
   useEffect(() => {
     if (userId) {
@@ -45,40 +86,46 @@ const InvoiceList = () => {
       if (customerRes.error) throw customerRes.error;
       if (itemRes.error) throw itemRes.error;
 
-      const invoiceData = invoiceRes.data;
-      const customerData = customerRes.data;
+      const invoiceData = invoiceRes.data || [];
+      const customerData = customerRes.data || [];
 
       const itemMap = {};
-      itemRes.data.forEach((item) => {
+      (itemRes.data || []).forEach((item) => {
         itemMap[item.item_id] = item;
       });
 
-      const invoiceItemsRes = await supabase
-        .from("invoice_items")
-        .select("*")
-        .in(
-          "invoice_id",
-          invoiceData.map((inv) => inv.invoice_id)
-        );
+      if (invoiceData.length > 0) {
+        const invoiceItemsRes = await supabase
+          .from("invoice_items")
+          .select("*")
+          .in(
+            "invoice_id",
+            invoiceData.map((inv) => inv.invoice_id)
+          );
 
-      if (invoiceItemsRes.error) throw invoiceItemsRes.error;
+        if (invoiceItemsRes.error) throw invoiceItemsRes.error;
 
-      const invoiceMap = {};
-      invoiceItemsRes.data.forEach((item) => {
-        if (!invoiceMap[item.invoice_id]) invoiceMap[item.invoice_id] = [];
-        invoiceMap[item.invoice_id].push(item);
-      });
+        const invoiceMap = {};
+        (invoiceItemsRes.data || []).forEach((item) => {
+          if (!invoiceMap[item.invoice_id]) invoiceMap[item.invoice_id] = [];
+          invoiceMap[item.invoice_id].push(item);
+        });
 
-      const mergedInvoices = invoiceData.map((inv) => ({
-        ...inv,
-        customer: customerData.find((c) => c.brand_id === inv.brand_id),
-        items: invoiceMap[inv.invoice_id] || [],
-      }));
+        const mergedInvoices = invoiceData.map((inv) => ({
+          ...inv,
+          customer: customerData.find((c) => c.brand_id === inv.brand_id),
+          items: invoiceMap[inv.invoice_id] || [],
+        }));
 
-      setInvoices(mergedInvoices);
+        setInvoices(mergedInvoices);
+      } else {
+        setInvoices([]);
+      }
+
       setItemsMap(itemMap);
     } catch (error) {
       console.error("❌ Error fetching invoices:", error.message || error);
+      toast.error("Failed to fetch invoices");
     } finally {
       setLoading(false);
     }
@@ -100,50 +147,123 @@ const InvoiceList = () => {
   };
 
   const generatePDF = async (invoice) => {
-    const content = document.getElementById("invoice-template-pdf-render");
+    if (generatingPDF) return;
 
-    if (!content) {
-      alert("Invoice preview not available for PDF generation.");
-      return;
-    }
+    setGeneratingPDF(true);
+    toast.info("Generating PDF... Please wait");
 
     try {
-      const canvas = await html2canvas(content, {
-        scale: 2,
-        useCORS: true,
-        logging: true,
-        width: content.offsetWidth,
-        height: content.offsetHeight,
+      // Create a temporary container for PDF generation
+      const tempContainer = document.createElement("div");
+      tempContainer.style.position = "absolute";
+      tempContainer.style.left = "-9999px";
+      tempContainer.style.top = "-9999px";
+      tempContainer.style.width = "210mm"; // A4 width
+      tempContainer.style.backgroundColor = "white";
+      tempContainer.style.padding = "0";
+      tempContainer.style.margin = "0";
+      tempContainer.style.fontFamily = "Arial, sans-serif";
+
+      document.body.appendChild(tempContainer);
+
+      // Create a React root and render the invoice template
+      const { createRoot } = await import("react-dom/client");
+      const root = createRoot(tempContainer);
+
+      await new Promise((resolve) => {
+        root.render(
+          <InvoiceTemplate
+            invoice={invoice}
+            creator={creator}
+            customer={invoice.customer}
+            items={invoice.items}
+            itemsMap={itemsMap}
+          />
+        );
+        // Wait for rendering to complete
+        setTimeout(resolve, 1000);
       });
 
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF("p", "mm", "a4");
+      // Generate canvas with proper settings
+      const canvas = await html2canvas(tempContainer, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#ffffff",
+        width: tempContainer.scrollWidth,
+        height: tempContainer.scrollHeight,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: tempContainer.scrollWidth,
+        windowHeight: tempContainer.scrollHeight,
+      });
 
-      const imgWidth = 210;
-      const pageHeight = 297;
+      // Clean up the temporary container
+      root.unmount();
+      document.body.removeChild(tempContainer);
+
+      // Create PDF with exact A4 dimensions
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pdfWidth = 210; // A4 width in mm
+      const pdfHeight = 297; // A4 height in mm
+
+      const imgWidth = pdfWidth;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-      let heightLeft = imgHeight;
-      let pageNum = 0;
+      // Convert canvas to image
+      const imgData = canvas.toDataURL("image/png", 1.0);
 
-      while (heightLeft > 0) {
-        let position = -(pageNum * pageHeight);
-        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-        if (heightLeft > 0) {
-          pdf.addPage();
-        }
-        pageNum++;
+      // Add image to PDF - only add one page
+      if (imgHeight <= pdfHeight) {
+        // Image fits in one page
+        pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
+      } else {
+        // Image is too tall, scale it to fit one page
+        const scaledHeight = pdfHeight;
+        const scaledWidth = (canvas.width * scaledHeight) / canvas.height;
+        pdf.addImage(imgData, "PNG", 0, 0, scaledWidth, scaledHeight);
       }
 
-      pdf.save(`${invoice.invoice_number}.pdf`);
+      // Save the PDF
+      pdf.save(`${invoice.invoice_number || "invoice"}.pdf`);
+      toast.success("PDF downloaded successfully! 🎉");
     } catch (err) {
       console.error("❌ PDF generation error:", err);
-      alert("Error generating PDF. See console for more details.");
+      toast.error("Error generating PDF. Please try again.");
+    } finally {
+      setGeneratingPDF(false);
     }
   };
+  const handleShareInvoice = async (invoice, e) => {
+    e.stopPropagation();
 
-  // NEW: Function to update invoice status
+    try {
+      // Generate the public link
+      const currentDomain = window.location.origin;
+      const shareLink = `${currentDomain}/invoice/${invoice.invoice_id}`;
+
+      // Copy to clipboard
+      await navigator.clipboard.writeText(shareLink);
+
+      toast.success("Invoice link copied to clipboard! 📋");
+    } catch (error) {
+      console.error("❌ Error sharing invoice:", error);
+
+      // Fallback for browsers that don't support clipboard API
+      const currentDomain = window.location.origin;
+      const shareLink = `${currentDomain}/invoice/${invoice.invoice_id}`;
+
+      // Create a temporary input element to copy the text
+      const tempInput = document.createElement("input");
+      tempInput.value = shareLink;
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      document.execCommand("copy");
+      document.body.removeChild(tempInput);
+
+      toast.success("Invoice link copied to clipboard! 📋");
+    }
+  };
   const updateInvoiceStatus = async (invoiceId, newStatus, e) => {
     e.stopPropagation();
 
@@ -155,26 +275,23 @@ const InvoiceList = () => {
 
       if (error) throw error;
 
-      // Update the local state
       setInvoices((prevInvoices) =>
         prevInvoices.map((inv) =>
           inv.invoice_id === invoiceId ? { ...inv, status: newStatus } : inv
         )
       );
 
-      // Update selected invoice if it's the one being modified
       if (selectedInvoice?.invoice_id === invoiceId) {
         setSelectedInvoice((prev) => ({ ...prev, status: newStatus }));
       }
 
-      alert(`Invoice status updated to ${newStatus}!`);
+      toast.success(`Invoice status updated to ${newStatus}! ✨`);
     } catch (error) {
       console.error("❌ Error updating invoice status:", error.message);
-      alert("Failed to update invoice status. Please try again.");
+      toast.error("Failed to update invoice status. Please try again.");
     }
   };
 
-  // IMPROVED: Better delete function with proper error handling
   const handleDelete = async (invoiceId, e) => {
     e.stopPropagation();
 
@@ -188,8 +305,6 @@ const InvoiceList = () => {
     try {
       console.log("🗑️ Starting delete process for invoice:", invoiceId);
 
-      // Start a transaction-like approach
-      // First, delete all related invoice items
       const { error: itemsError } = await supabase
         .from("invoice_items")
         .delete()
@@ -204,12 +319,11 @@ const InvoiceList = () => {
 
       console.log("✅ Invoice items deleted successfully");
 
-      // Then delete the main invoice
       const { error: invoiceError } = await supabase
         .from("invoices")
         .delete()
         .eq("invoice_id", invoiceId)
-        .eq("user_id", userId); // Extra security check
+        .eq("user_id", userId);
 
       if (invoiceError) {
         console.error("❌ Error deleting invoice:", invoiceError);
@@ -218,22 +332,19 @@ const InvoiceList = () => {
 
       console.log("✅ Invoice deleted successfully");
 
-      // Update local state immediately for better UX
       setInvoices((prevInvoices) =>
         prevInvoices.filter((inv) => inv.invoice_id !== invoiceId)
       );
 
-      // Clear preview if the deleted invoice was selected
       if (selectedInvoice?.invoice_id === invoiceId) {
         setSelectedInvoice(null);
         setShowPreview(false);
       }
 
-      alert("Invoice deleted successfully!");
+      toast.success("Invoice deleted successfully! 🗑️");
     } catch (error) {
       console.error("❌ Delete operation failed:", error);
-      alert(`Failed to delete invoice: ${error.message}`);
-      // Refresh the list to ensure data consistency
+      toast.error(`Failed to delete invoice: ${error.message}`);
       await fetchInvoices();
     }
   };
@@ -273,428 +384,592 @@ const InvoiceList = () => {
     (inv) => inv.status === "overdue"
   ).length;
 
-  // Filter invoices based on active filter
-  const filteredInvoices = invoices.filter((invoice) => {
-    if (activeFilter === "all") return true;
-    if (activeFilter === "paid") return invoice.status === "paid";
-    if (activeFilter === "unpaid") return invoice.status === "unpaid";
-    if (activeFilter === "overdue") return invoice.status === "overdue";
-    return true;
-  });
+  // Filter and search invoices
+  const filteredInvoices = invoices
+    .filter((invoice) => {
+      const matchesFilter =
+        activeFilter === "all" ||
+        (activeFilter === "paid" && invoice.status === "paid") ||
+        (activeFilter === "unpaid" && invoice.status === "unpaid") ||
+        (activeFilter === "overdue" && invoice.status === "overdue");
+
+      const matchesSearch =
+        !searchTerm ||
+        invoice.invoice_number
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        invoice.customer?.name
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        invoice.customer?.brand_name
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase());
+
+      return matchesFilter && matchesSearch;
+    })
+    .sort((a, b) => {
+      const aValue = a[sortBy];
+      const bValue = b[sortBy];
+
+      if (sortOrder === "asc") {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
 
   const getStatusColor = (status) => {
     switch (status) {
       case "paid":
-        return "text-green-600 bg-green-100";
+        return "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
       case "unpaid":
-        return "text-red-600 bg-red-100";
+        return "text-amber-400 bg-amber-500/10 border-amber-500/20";
       case "overdue":
-        return "text-orange-600 bg-orange-100";
+        return "text-red-400 bg-red-500/10 border-red-500/20";
       default:
-        return "text-gray-600 bg-gray-100";
+        return "text-gray-400 bg-gray-500/10 border-gray-500/20";
     }
   };
 
   const getStatusIcon = (status) => {
     switch (status) {
       case "paid":
-        return "✓";
+        return <CheckCircle className="w-4 h-4" />;
       case "unpaid":
-        return "⏳";
+        return <Clock className="w-4 h-4" />;
       case "overdue":
-        return "⚠";
+        return <AlertTriangle className="w-4 h-4" />;
       default:
-        return "○";
+        return <FileText className="w-4 h-4" />;
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gray-900 text-white p-6">
-      <h2 className="text-3xl font-bold mb-8">Invoice Dashboard</h2>
-
-      {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <div className="text-xl">Loading invoices...</div>
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0a0e1a] via-[#0f1419] to-[#1a1f2e] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-white text-lg">Loading invoices...</p>
         </div>
-      ) : (
-        <>
-          {/* Statistics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-gray-800 rounded-lg p-6 border-l-4 border-green-500">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-400 text-sm">Total Revenue</p>
-                  <p className="text-2xl font-bold text-white">
-                    ₹{totalRevenue.toLocaleString()}
-                  </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-[#0a0e1a] via-[#0f1419] to-[#1a1f2e]">
+      {/* Navigation Header */}
+
+      {/* Hero Section */}
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0  to-purple-500/10"></div>
+        <div className="relative max-w-7xl mx-auto px-6 py-12">
+          <div className="flex flex-col lg:flex-row items-center justify-between">
+            <div className="flex-1 mb-8 lg:mb-0">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-12 h-12 flex items-center justify-center">
+                  <BarChart3 className="w-6 h-6 text-white" />
                 </div>
-                <div className="bg-green-500 p-3 rounded-full">
-                  <svg
-                    className="w-6 h-6 text-white"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
-                  </svg>
+                <div className="flex items-center space-x-2">
+                  <h1 className="text-4xl font-bold text-white">
+                    Invoice Dashboard
+                  </h1>
+                  <Sparkles className="w-6 h-6 text-emerald-400 animate-pulse" />
                 </div>
               </div>
-            </div>
-
-            <div className="bg-gray-800 rounded-lg p-6 border-l-4 border-green-400">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-400 text-sm">Paid Amount</p>
-                  <p className="text-2xl font-bold text-white">
-                    ₹{paidAmount.toLocaleString()}
-                  </p>
-                </div>
-                <div className="bg-green-400 p-3 rounded-full">
-                  <svg
-                    className="w-6 h-6 text-white"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gray-800 rounded-lg p-6 border-l-4 border-yellow-500">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-400 text-sm">Pending Amount</p>
-                  <p className="text-2xl font-bold text-white">
-                    ₹{pendingAmount.toLocaleString()}
-                  </p>
-                </div>
-                <div className="bg-yellow-500 p-3 rounded-full">
-                  <svg
-                    className="w-6 h-6 text-white"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gray-800 rounded-lg p-6 border-l-4 border-red-500">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-400 text-sm">Overdue Amount</p>
-                  <p className="text-2xl font-bold text-white">
-                    ₹{overdueAmount.toLocaleString()}
-                  </p>
-                </div>
-                <div className="bg-red-500 p-3 rounded-full">
-                  <svg
-                    className="w-6 h-6 text-white"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Filter Buttons */}
-          <div className="flex flex-wrap gap-4 mb-6">
-            <button
-              onClick={() => setActiveFilter("all")}
-              className={`px-6 py-2 rounded-full font-medium transition-colors ${
-                activeFilter === "all"
-                  ? "bg-emerald-600 text-white"
-                  : "bg-gray-800 text-gray-300 hover:bg-gray-700"
-              }`}
-            >
-              All Invoices ({invoices.length})
-            </button>
-            <button
-              onClick={() => setActiveFilter("paid")}
-              className={`px-6 py-2 rounded-full font-medium transition-colors ${
-                activeFilter === "paid"
-                  ? "bg-emerald-600 text-white"
-                  : "bg-gray-800 text-gray-300 hover:bg-gray-700"
-              }`}
-            >
-              Paid ({paidCount})
-            </button>
-            <button
-              onClick={() => setActiveFilter("unpaid")}
-              className={`px-6 py-2 rounded-full font-medium transition-colors ${
-                activeFilter === "unpaid"
-                  ? "bg-emerald-600 text-white"
-                  : "bg-gray-800 text-gray-300 hover:bg-gray-700"
-              }`}
-            >
-              Unpaid ({unpaidCount})
-            </button>
-            <button
-              onClick={() => setActiveFilter("overdue")}
-              className={`px-6 py-2 rounded-full font-medium transition-colors ${
-                activeFilter === "overdue"
-                  ? "bg-emerald-600 text-white"
-                  : "bg-gray-800 text-gray-300 hover:bg-gray-700"
-              }`}
-            >
-              Overdue ({overdueCount})
-            </button>
-          </div>
-
-          {filteredInvoices.length === 0 ? (
-            <div className="bg-gray-800 rounded-lg p-8 text-center">
-              <p className="text-gray-400 text-lg">
-                No invoices found for the selected filter.
+              <p className="text-xl text-gray-300 mb-6 max-w-2xl">
+                Manage all your invoices, track payments, and monitor your
+                business performance
               </p>
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2 text-gray-400">
+                  <Shield className="w-4 h-4 text-emerald-400" />
+                  <span className="text-sm">Secure & Compliant</span>
+                </div>
+                <div className="flex items-center space-x-2 text-gray-400">
+                  <Activity className="w-4 h-4 text-blue-400" />
+                  <span className="text-sm">Real-time Updates</span>
+                </div>
+                <div className="flex items-center space-x-2 text-gray-400">
+                  <Target className="w-4 h-4 text-purple-400" />
+                  <span className="text-sm">Business Insights</span>
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="flex flex-col lg:flex-row gap-6">
-              {/* Invoice Table */}
-              <div
-                className={`${
-                  showPreview ? "lg:w-1/2" : "w-full"
-                } bg-gray-800 rounded-lg overflow-hidden`}
+
+            {/* Quick Actions */}
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => navigate("/dashboard/invoice")}
+                className="group flex items-center space-x-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-emerald-500/25 transform hover:scale-105"
               >
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-700">
-                      <tr>
-                        <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">
-                          Invoice
-                        </th>
-                        <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">
-                          Customer
-                        </th>
-                        <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">
-                          Date
-                        </th>
-                        <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">
-                          Amount
-                        </th>
-                        <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">
-                          GST
-                        </th>
-                        <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">
-                          Total
-                        </th>
-                        <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">
-                          Status
-                        </th>
-                        <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-700">
-                      {filteredInvoices.map((invoice) => (
-                        <tr
-                          key={invoice.invoice_id}
-                          onClick={() => handleRowClick(invoice)}
-                          className={`hover:bg-gray-700 cursor-pointer transition-colors ${
-                            selectedInvoice?.invoice_id === invoice.invoice_id
-                              ? "bg-gray-700 ring-2 ring-emerald-500"
-                              : ""
-                          }`}
-                        >
-                          <td className="px-6 py-4">
-                            <div className="flex items-center">
-                              <span
-                                className={`mr-2 ${
-                                  getStatusIcon(invoice.status) === "✓"
-                                    ? "text-green-500"
-                                    : getStatusIcon(invoice.status) === "⚠"
-                                    ? "text-orange-500"
-                                    : "text-yellow-500"
-                                }`}
-                              >
-                                {getStatusIcon(invoice.status)}
-                              </span>
-                              <span className="font-medium">
+                <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-200" />
+                <span>Create Invoice</span>
+              </button>
+              <button
+                onClick={fetchInvoices}
+                className="flex items-center space-x-2 bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 px-4 py-3 rounded-xl transition-all duration-200"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Refresh</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="max-w-7xl mx-auto px-6 pb-12">
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="bg-[#1a1f2e]/60 backdrop-blur-sm rounded-2xl border border-gray-700/50 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 text-sm font-medium">
+                  Total Revenue
+                </p>
+                <p className="text-2xl font-bold text-white mt-1">
+                  ₹{totalRevenue.toLocaleString()}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-gradient-to-r from-emerald-500/20 to-green-500/20 rounded-xl flex items-center justify-center">
+                <TrendingUp className="w-6 h-6 text-emerald-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-[#1a1f2e]/60 backdrop-blur-sm rounded-2xl border border-gray-700/50 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 text-sm font-medium">Paid Amount</p>
+                <p className="text-2xl font-bold text-white mt-1">
+                  ₹{paidAmount.toLocaleString()}
+                </p>
+                <p className="text-emerald-400 text-xs mt-1">
+                  {paidCount} invoices
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-gradient-to-r from-emerald-500/20 to-green-500/20 rounded-xl flex items-center justify-center">
+                <CheckCircle className="w-6 h-6 text-emerald-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-[#1a1f2e]/60 backdrop-blur-sm rounded-2xl border border-gray-700/50 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 text-sm font-medium">
+                  Pending Amount
+                </p>
+                <p className="text-2xl font-bold text-white mt-1">
+                  ₹{pendingAmount.toLocaleString()}
+                </p>
+                <p className="text-amber-400 text-xs mt-1">
+                  {unpaidCount} invoices
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-gradient-to-r from-amber-500/20 to-orange-500/20 rounded-xl flex items-center justify-center">
+                <Clock className="w-6 h-6 text-amber-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-[#1a1f2e]/60 backdrop-blur-sm rounded-2xl border border-gray-700/50 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 text-sm font-medium">
+                  Overdue Amount
+                </p>
+                <p className="text-2xl font-bold text-white mt-1">
+                  ₹{overdueAmount.toLocaleString()}
+                </p>
+                <p className="text-red-400 text-xs mt-1">
+                  {overdueCount} invoices
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-gradient-to-r from-red-500/20 to-pink-500/20 rounded-xl flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-400" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Filters and Search */}
+        <div className="bg-[#1a1f2e]/60 backdrop-blur-sm rounded-2xl border border-gray-700/50 p-6 mb-8">
+          <div className="flex flex-col lg:flex-row items-center justify-between space-y-4 lg:space-y-0 lg:space-x-6">
+            {/* Search */}
+            <div className="flex-1 w-full lg:w-auto">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search invoices by number or customer..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 bg-[#0f1419] border border-gray-600/50 rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Filter Buttons */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setActiveFilter("all")}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  activeFilter === "all"
+                    ? "bg-emerald-500 text-white"
+                    : "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50"
+                }`}
+              >
+                All ({invoices.length})
+              </button>
+              <button
+                onClick={() => setActiveFilter("paid")}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  activeFilter === "paid"
+                    ? "bg-emerald-500 text-white"
+                    : "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50"
+                }`}
+              >
+                Paid ({paidCount})
+              </button>
+              <button
+                onClick={() => setActiveFilter("unpaid")}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  activeFilter === "unpaid"
+                    ? "bg-emerald-500 text-white"
+                    : "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50"
+                }`}
+              >
+                Unpaid ({unpaidCount})
+              </button>
+              <button
+                onClick={() => setActiveFilter("overdue")}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  activeFilter === "overdue"
+                    ? "bg-emerald-500 text-white"
+                    : "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50"
+                }`}
+              >
+                Overdue ({overdueCount})
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {filteredInvoices.length === 0 ? (
+          <div className="bg-[#1a1f2e]/60 backdrop-blur-sm rounded-2xl border border-gray-700/50 p-12 text-center">
+            <div className="w-24 h-24 bg-gradient-to-r from-emerald-500/20 to-blue-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <FileText className="w-12 h-12 text-emerald-400" />
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-3">
+              {searchTerm || activeFilter !== "all"
+                ? "No invoices found"
+                : "No invoices yet"}
+            </h3>
+            <p className="text-gray-400 text-lg mb-8 max-w-md mx-auto">
+              {searchTerm || activeFilter !== "all"
+                ? "Try adjusting your search terms or filters"
+                : "Get started by creating your first invoice"}
+            </p>
+            {!searchTerm && activeFilter === "all" && (
+              <button
+                onClick={() => navigate("/dashboard/invoice")}
+                className="inline-flex items-center space-x-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white px-8 py-4 rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-emerald-500/25 transform hover:scale-105"
+              >
+                <Plus className="w-5 h-5" />
+                <span>Create Your First Invoice</span>
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col xl:flex-row gap-8">
+            {/* Invoice Table */}
+            <div
+              className={`${
+                showPreview ? "xl:w-1/2" : "w-full"
+              } bg-[#1a1f2e]/60 backdrop-blur-sm rounded-2xl border border-gray-700/50 overflow-hidden`}
+            >
+              <div className="px-6 py-4 border-b border-gray-700/50 bg-gradient-to-r from-emerald-500/10 to-blue-500/10">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold text-white">
+                    Invoices ({filteredInvoices.length})
+                  </h2>
+                  <div className="flex items-center space-x-2">
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value)}
+                      className="px-3 py-1.5 bg-[#0f1419] border border-gray-600/50 rounded-lg text-white text-sm focus:ring-2 focus:ring-emerald-500 transition-all"
+                    >
+                      <option value="created_at">Sort by Date</option>
+                      <option value="invoice_number">Sort by Number</option>
+                      <option value="net_amount">Sort by Amount</option>
+                    </select>
+                    <button
+                      onClick={() =>
+                        setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+                      }
+                      className="p-1.5 bg-[#0f1419] border border-gray-600/50 rounded-lg text-gray-400 hover:text-white transition-all"
+                    >
+                      <Filter className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-800/30">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">
+                        Invoice
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">
+                        Customer
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">
+                        Date
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">
+                        Amount
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">
+                        GST
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">
+                        Total
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">
+                        Status
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700/50">
+                    {filteredInvoices.map((invoice) => (
+                      <tr
+                        key={invoice.invoice_id}
+                        onClick={() => handleRowClick(invoice)}
+                        className={`group  cursor-pointer transition-all duration-200 ${
+                          selectedInvoice?.invoice_id === invoice.invoice_id
+                            ? "bg-gray-800/30 ring-2 ring-emerald-500/50"
+                            : ""
+                        }`}
+                      >
+                        <td className="px-6 py-4">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-gradient-to-r from-emerald-500/20 to-blue-500/20 rounded-lg flex items-center justify-center">
+                              {getStatusIcon(invoice.status)}
+                            </div>
+                            <div>
+                              <span className="font-semibold text-white">
                                 {invoice.invoice_number}
                               </span>
+                              <p className="text-gray-400 text-sm">
+                                #{invoice.invoice_id?.slice(-8)}
+                              </p>
                             </div>
-                          </td>
-                          <td className="px-6 py-4 text-gray-300">
-                            {invoice.customer?.brand_name || "N/A"}
-                          </td>
-                          <td className="px-6 py-4 text-gray-300">
-                            {new Date(
-                              invoice.invoice_date
-                            ).toLocaleDateString()}
-                          </td>
-                          <td className="px-6 py-4 text-gray-300">
-                            ₹{(invoice.total_amount || 0).toLocaleString()}
-                          </td>
-                          <td className="px-6 py-4 text-gray-300">
-                            ₹{(invoice.gst_amount || 0).toLocaleString()}
-                          </td>
-                          <td className="px-6 py-4 text-gray-300 font-medium">
-                            ₹{(invoice.net_amount || 0).toLocaleString()}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span
-                              className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                                invoice.status
-                              )}`}
-                            >
-                              {invoice.status === "paid"
-                                ? "Paid"
-                                : invoice.status === "unpaid"
-                                ? "Unpaid"
-                                : "Overdue"}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div>
+                            <span className="text-white font-medium">
+                              {invoice.customer?.name ||
+                                invoice.customer?.brand_name ||
+                                "N/A"}
                             </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex gap-2 flex-wrap">
-                              {/* Status Toggle Buttons */}
-                              {invoice.status === "unpaid" && (
-                                <button
-                                  onClick={(e) =>
-                                    updateInvoiceStatus(
-                                      invoice.invoice_id,
-                                      "paid",
-                                      e
-                                    )
-                                  }
-                                  className="text-green-400 hover:text-green-300 text-sm font-medium px-2 py-1 rounded bg-green-400/10 hover:bg-green-400/20 transition-colors"
-                                >
-                                  Mark Paid
-                                </button>
-                              )}
-                              {invoice.status === "paid" && (
-                                <button
-                                  onClick={(e) =>
-                                    updateInvoiceStatus(
-                                      invoice.invoice_id,
-                                      "unpaid",
-                                      e
-                                    )
-                                  }
-                                  className="text-yellow-400 hover:text-yellow-300 text-sm font-medium px-2 py-1 rounded bg-yellow-400/10 hover:bg-yellow-400/20 transition-colors"
-                                >
-                                  Mark Unpaid
-                                </button>
-                              )}
-                              {invoice.status === "overdue" && (
-                                <>
-                                  <button
-                                    onClick={(e) =>
-                                      updateInvoiceStatus(
-                                        invoice.invoice_id,
-                                        "paid",
-                                        e
-                                      )
-                                    }
-                                    className="text-green-400 hover:text-green-300 text-sm font-medium px-2 py-1 rounded bg-green-400/10 hover:bg-green-400/20 transition-colors"
-                                  >
-                                    Mark Paid
-                                  </button>
-                                  <button
-                                    onClick={(e) =>
-                                      updateInvoiceStatus(
-                                        invoice.invoice_id,
-                                        "unpaid",
-                                        e
-                                      )
-                                    }
-                                    className="text-yellow-400 hover:text-yellow-300 text-sm font-medium px-2 py-1 rounded bg-yellow-400/10 hover:bg-yellow-400/20 transition-colors"
-                                  >
-                                    Mark Unpaid
-                                  </button>
-                                </>
-                              )}
-
-                              {/* Action Buttons */}
-                              <button
-                                onClick={(e) => handleEdit(invoice, e)}
-                                className="text-blue-400 hover:text-blue-300 text-sm font-medium px-2 py-1 rounded bg-blue-400/10 hover:bg-blue-400/20 transition-colors"
-                              >
-                                Edit
-                              </button>
+                            <p className="text-gray-400 text-sm">
+                              {invoice.customer?.address_state || "Unknown"}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-gray-300">
+                          {new Date(invoice.invoice_date).toLocaleDateString(
+                            "en-IN"
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-gray-300">
+                          ₹{(invoice.total_amount || 0).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 text-gray-300">
+                          ₹{(invoice.gst_amount || 0).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div>
+                            <span className="text-white font-semibold text-lg">
+                              ₹{(invoice.net_amount || 0).toLocaleString()}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(
+                              invoice.status
+                            )}`}
+                          >
+                            {getStatusIcon(invoice.status)}
+                            <span className="capitalize">
+                              {invoice.status || "unpaid"}
+                            </span>
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center space-x-2 opacity">
+                            {/* Status Toggle Buttons */}
+                            {invoice.status === "unpaid" && (
                               <button
                                 onClick={(e) =>
-                                  handleDelete(invoice.invoice_id, e)
+                                  updateInvoiceStatus(
+                                    invoice.invoice_id,
+                                    "paid",
+                                    e
+                                  )
                                 }
-                                className="text-red-400 hover:text-red-300 text-sm font-medium px-2 py-1 rounded bg-red-400/10 hover:bg-red-400/20 transition-colors"
+                                className="p-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-lg transition-all"
+                                title="Mark as Paid"
                               >
-                                Delete
+                                <CheckCircle className="w-4 h-4" />
                               </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                            )}
+                            {invoice.status === "paid" && (
+                              <button
+                                onClick={(e) =>
+                                  updateInvoiceStatus(
+                                    invoice.invoice_id,
+                                    "unpaid",
+                                    e
+                                  )
+                                }
+                                className="p-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg transition-all"
+                                title="Mark as Unpaid"
+                              >
+                                <Clock className="w-4 h-4" />
+                              </button>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePreview(invoice);
+                              }}
+                              className="p-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all"
+                              title="Preview"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                generatePDF(invoice);
+                              }}
+                              disabled={generatingPDF}
+                              className="p-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-lg transition-all disabled:opacity-50"
+                              title="Download PDF"
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => handleEdit(invoice, e)}
+                              className="p-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg transition-all"
+                              title="Edit"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) =>
+                                handleDelete(invoice.invoice_id, e)
+                              }
+                              className="p-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-all"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Invoice Preview */}
+            {showPreview && selectedInvoice && (
+              <div className="xl:w-1/2 bg-white text-black rounded-2xl overflow-hidden shadow-2xl">
+                <div className="sticky top-0 bg-white border-b p-6 flex justify-between items-center z-10">
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">
+                      Invoice Preview
+                    </h3>
+                    <p className="text-gray-600">
+                      {selectedInvoice.invoice_number}
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <button
+                      onClick={() =>
+                        handleShareInvoice(selectedInvoice, {
+                          stopPropagation: () => {},
+                        })
+                      }
+                      className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      <span>Share</span>
+                    </button>
+                    <button
+                      onClick={() => generatePDF(selectedInvoice)}
+                      disabled={generatingPDF}
+                      className="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                    >
+                      {generatingPDF ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
+                      <span>Download PDF</span>
+                    </button>
+
+                    <button
+                      onClick={() => setShowPreview(false)}
+                      className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="p-6 max-h-[calc(100vh-200px)] overflow-auto">
+                  <InvoiceTemplate
+                    invoice={selectedInvoice}
+                    creator={creator}
+                    customer={selectedInvoice.customer}
+                    items={selectedInvoice.items}
+                    itemsMap={itemsMap}
+                  />
                 </div>
               </div>
+            )}
+          </div>
+        )}
+      </div>
 
-              {/* Invoice Preview */}
-              {showPreview && selectedInvoice && (
-                <div className="lg:w-1/2 bg-white text-black rounded-lg overflow-auto max-h-screen">
-                  <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
-                    <h3 className="text-lg font-semibold">Invoice Preview</h3>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => generatePDF(selectedInvoice)}
-                        className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors"
-                      >
-                        Download PDF
-                      </button>
-                      <button
-                        onClick={() => setShowPreview(false)}
-                        className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </div>
-                  <div className="p-6">
-                    <InvoiceTemplate
-                      invoice={selectedInvoice}
-                      creator={creator}
-                      customer={selectedInvoice.customer}
-                      items={selectedInvoice.items}
-                      itemsMap={itemsMap}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Hidden element for PDF generation */}
-          {selectedInvoice && (
-            <div
-              id="invoice-template-pdf-render"
-              className="absolute -left-[9999px] -top-[9999px]"
-            >
-              <InvoiceTemplate
-                invoice={selectedInvoice}
-                creator={creator}
-                customer={selectedInvoice.customer}
-                items={selectedInvoice.items}
-                itemsMap={itemsMap}
-              />
-            </div>
-          )}
-        </>
-      )}
+      {/* Toast Container */}
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="dark"
+        toastStyle={{
+          backgroundColor: "#1a1f2e",
+          color: "#fff",
+          border: "1px solid #374151",
+        }}
+      />
     </div>
   );
 };

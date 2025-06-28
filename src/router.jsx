@@ -9,10 +9,12 @@ import Items from "./routes/Items";
 import Customer from "./routes/Customer";
 import InvoiceGenerator from "./routes/Invoice";
 import InvoiceList from "./routes/InvoiceList";
+import PublicInvoiceView from "./routes/PublicInvoiceView";
 export const router = createBrowserRouter([
   { path: "/", element: <App /> },
   { path: "/signup", element: <Signup /> },
   { path: "/signin", element: <Signin /> },
+  { path: "/invoice/:invoiceId", element: <PublicInvoiceView /> },
   {
     path: "/dashboard",
     element: (
