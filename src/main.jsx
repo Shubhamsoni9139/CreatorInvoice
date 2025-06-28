@@ -5,13 +5,15 @@ import "./index.css";
 import { router } from "./router.jsx";
 import { RouterProvider } from "react-router-dom";
 import { AuthContextProvider } from "./context/AuthContext.jsx";
-import { Analytics } from "@vercel/analytics/react"; // ✅ Import Vercel Analytics
+import { inject } from "@vercel/analytics";
+
+// Inject Vercel Analytics once app mounts
+inject({ framework: "react" });
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <AuthContextProvider>
       <RouterProvider router={router} />
-      <Analytics /> {/* ✅ Include Analytics inside the tree */}
     </AuthContextProvider>
   </StrictMode>
 );
