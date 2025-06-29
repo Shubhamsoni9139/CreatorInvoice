@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { UserAuth } from "../context/AuthContext";
+import { useSearchParams } from "react-router-dom";
 import {
   Eye,
   EyeOff,
@@ -14,8 +15,12 @@ import {
 } from "lucide-react";
 
 const Signin = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [searchParams] = useSearchParams();
+  const [email, setEmail] = useState(() => searchParams.get("email") || "");
+  const [password, setPassword] = useState(
+    () => searchParams.get("password") || ""
+  );
+
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -66,6 +71,7 @@ const Signin = () => {
                     type="email"
                     name="email"
                     id="email"
+                    value={email}
                     placeholder="Enter your email"
                     required
                   />
@@ -89,6 +95,7 @@ const Signin = () => {
                     className="w-full pl-10 pr-12 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
                     type={showPassword ? "text" : "password"}
                     name="password"
+                    value={password}
                     id="password"
                     placeholder="Enter your password"
                     required
