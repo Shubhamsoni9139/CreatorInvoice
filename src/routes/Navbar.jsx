@@ -2,11 +2,19 @@ import React, { useState, useEffect } from "react";
 import { UserAuth } from "../context/AuthContext";
 import { Link } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import { Menu, X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+
 const Navbar = () => {
   const { session } = UserAuth();
   const [creator, setCreator] = useState(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const dropdownVariants = {
+    hidden: { opacity: 0, y: -10 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
+    exit: { opacity: 0, y: -10, transition: { duration: 0.2 } },
+  };
 
-  // Fetch creator data
   const fetchCreator = async () => {
     try {
       if (!session?.user?.id) return;
@@ -49,67 +57,139 @@ const Navbar = () => {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       console.log("Successfully signed out!");
-      // Optionally redirect the user
-      // navigate("/login"); or window.location.href = "/login";
     } catch (err) {
       console.error("Sign out error:", err.message);
     }
   };
 
   return (
-    <header className="absolute inset-x-0 top-0 z-10 w-full">
-      <div className="px-4 mx-auto sm:px-6 lg:px-8 bg-gradient-to-r from-green-300 to-black rounded-full mt-2 ml-2 mr-2">
-        <div className="flex items-center justify-between h-16 lg:h-20">
+    <header className="absolute inset-x-0 top-0 z-50 w-full">
+      <div className="px-4 mx-auto sm:px-6 lg:px-8 bg-gradient-to-r from-green-300 to-black rounded-full mt-2 ml-2 mr-2 shadow-md">
+        <div className="flex items-center justify-between h-16 lg:h-20 relative">
+          {/* Logo */}
           <div className="flex-shrink-0">
-            <Link to="/dashboard" className="flex">
-              <span className="text-3xl font-extrabold text-black">
+            <Link to="/dashboard" className="flex items-center">
+              <span className="text-2xl font-extrabold text-black">
                 CreatorIn
               </span>
             </Link>
           </div>
 
-          <div className="hidden lg:flex lg:items-center lg:justify-center lg:space-x-10 ml-5">
+          {/* Desktop Nav */}
+          <div className="hidden lg:flex lg:items-center lg:space-x-10">
             <Link
               to="/dashboard/items"
-              className="text-base text-black transition-all duration-200 hover:text-opacity-80"
+              className="text-base text-black hover:text-opacity-80 transition"
             >
               Items
             </Link>
             <Link
               to="/dashboard/customer"
-              className="text-base text-black transition-all duration-200 hover:text-opacity-80"
+              className="text-base text-black hover:text-opacity-80 transition"
             >
               Customer
             </Link>
             <Link
               to="/dashboard/invoice"
-              className="text-base text-black transition-all duration-200 hover:text-opacity-80"
+              className="text-base text-black hover:text-opacity-80 transition"
             >
               Create
             </Link>
             <Link
               to="/dashboard/all"
-              className="text-base text-black transition-all duration-200 hover:text-opacity-80"
+              className="text-base text-black hover:text-opacity-80 transition"
             >
               Invoices
             </Link>
           </div>
 
-          <div className="lg:flex lg:items-center lg:justify-end lg:space-x-6 sm:ml-auto">
+          {/* Buttons - Desktop */}
+          <div className="hidden lg:flex items-center space-x-4">
             <button
               onClick={handleSignOut}
-              className="hidden text-base text-white transition-all duration-200 lg:inline-flex hover:text-opacity-80"
+              className="text-base text-white hover:text-opacity-80 transition"
             >
               Sign Out
             </button>
             <Link
               to="/dashboard/profile"
-              className="inline-flex items-center justify-center px-3 sm:px-5 py-2.5 text-sm sm:text-base font-semibold transition-all duration-200 text-white bg-white/20 hover:bg-white/40 focus:bg-white/40 rounded-lg"
+              className="px-4 py-2 text-sm font-semibold text-white bg-white/20 hover:bg-white/40 rounded-lg transition"
             >
               Profile
             </Link>
           </div>
+
+          {/* Mobile Menu Button */}
+          <div className="lg:hidden flex items-center">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 text-black bg-white/40 hover:bg-white/60 rounded-md"
+            >
+              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+          </div>
         </div>
+        {mobileMenuOpen && (
+          <AnimatePresence>
+            {mobileMenuOpen && (
+              <motion.div
+                key="mobile-menu"
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                variants={{
+                  hidden: { opacity: 0, y: -10 },
+                  visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
+                  exit: { opacity: 0, y: -10, transition: { duration: 0.2 } },
+                }}
+                className="lg:hidden absolute left-0 right-0 top-full z-40 mt-1 px-4 space-y-2 pb-4 bg-gradient-to-r from-black to-green-900 rounded-b-xl shadow-lg text-sm text-white"
+              >
+                <Link
+                  to="/dashboard/items"
+                  className="block px-4 py-2 rounded-md bg-white/10 hover:bg-white/20"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Items
+                </Link>
+                <Link
+                  to="/dashboard/customer"
+                  className="block px-4 py-2 rounded-md bg-white/10 hover:bg-white/20"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Customer
+                </Link>
+                <Link
+                  to="/dashboard/invoice"
+                  className="block px-4 py-2 rounded-md bg-white/10 hover:bg-white/20"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Create
+                </Link>
+                <Link
+                  to="/dashboard/all"
+                  className="block px-4 py-2 rounded-md bg-white/10 hover:bg-white/20"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Invoices
+                </Link>
+                <hr className="border-white/20 my-2" />
+                <button
+                  onClick={handleSignOut}
+                  className="block w-full text-left px-4 py-2 rounded-md bg-white/10 hover:bg-white/20"
+                >
+                  Sign Out
+                </button>
+                <Link
+                  to="/dashboard/profile"
+                  className="block px-4 py-2 rounded-md bg-white/10 hover:bg-white/20"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Profile
+                </Link>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        )}
       </div>
     </header>
   );
